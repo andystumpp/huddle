@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Huddle.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Huddle.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
