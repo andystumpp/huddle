@@ -1,0 +1,18 @@
+# .NET / WinUI build outputs
+bin/
+obj/
+*.user
+*.suo
+Generated Files/
+
+# Tooling caches
+.vs/
+.idea/
+
+# Publish output
+publish/
+*.pubxml.user
+
+# OS files
+Thumbs.db
+.DS_Store
