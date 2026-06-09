@@ -4,7 +4,10 @@ using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Graphics;
 using WinRT.Interop;
 
@@ -16,10 +19,19 @@ public sealed partial class PeekPanelWindow : Window
     private const int RightGap = 12;
     private const int BottomGap = 12;
     private const int HeightHeadroom = 84;
-    private const int DesiredHeight = 420;
+    private const int DesiredHeight = 460;
+
+    // Demo cadence — short so the panel feels alive while we're iterating.
+    // Real Huddle ticks every 3 minutes (ADR 0001).
+    private const int TickSeconds = 18;
 
     private readonly IntPtr _hwnd;
     private readonly AppWindow _appWindow;
+    private readonly DispatcherTimer _tickTimer;
+
+    private int _secondsRemaining = TickSeconds;
+    private bool _paused;
+    private Storyboard? _pulseStoryboard;
 
     public PeekPanelWindow()
     {
@@ -34,6 +46,22 @@ public sealed partial class PeekPanelWindow : Window
 
         ConfigureChrome();
         TrySetAcrylicBackdrop();
+
+        _tickTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _tickTimer.Tick += OnTick;
+
+        if (Content is FrameworkElement fe)
+        {
+            fe.Loaded += OnContentLoaded;
+        }
+    }
+
+    private void OnContentLoaded(object sender, RoutedEventArgs e)
+    {
+        StartWatchDotPulse();
+        UpdateStatus();
+        UpdateLookBar();
+        _tickTimer.Start();
     }
 
     public void ShowPanel()
@@ -44,12 +72,14 @@ public sealed partial class PeekPanelWindow : Window
         Activate();
     }
 
+    // --- chrome / backdrop -----------------------------------------------
+
     private void ConfigureChrome()
     {
-        ExtendsContentIntoTitleBar = false;
+        ExtendsContentIntoTitleBar = true;
         if (_appWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: true);
+            presenter.SetBorderAndTitleBar(hasBorder: false, hasTitleBar: false);
             presenter.IsResizable = false;
             presenter.IsMinimizable = false;
             presenter.IsMaximizable = false;
@@ -61,21 +91,131 @@ public sealed partial class PeekPanelWindow : Window
     {
         if (DesktopAcrylicController.IsSupported())
         {
+            // Tuned to roughly match the prototype's `aurora` panel-bg:
+            // rgba(28, 30, 42, 0.66) over a heavy blur+saturation, with the
+            // aurora gradients carrying most of the chromatic character.
             SystemBackdrop = new DesktopAcrylicBackdrop();
         }
-        else
+        else if (Content is FrameworkElement fe)
         {
-            // Fallback: opaque dark tint, still readable.
-            if (Content is FrameworkElement fe)
-            {
-                fe.RequestedTheme = ElementTheme.Dark;
-            }
+            fe.RequestedTheme = ElementTheme.Dark;
             if (RootClip != null)
             {
-                RootClip.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xB8, 0x24, 0x26, 0x2B));
+                RootClip.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0xB8, 0x1C, 0x1E, 0x2A));
             }
         }
     }
+
+    // --- tick / look-bar -------------------------------------------------
+
+    private void OnTick(object? sender, object e)
+    {
+        if (_paused) return;
+        _secondsRemaining--;
+        if (_secondsRemaining <= 0) _secondsRemaining = TickSeconds;
+        UpdateStatus();
+        UpdateLookBar();
+    }
+
+    private void UpdateStatus()
+    {
+        if (_paused)
+        {
+            StatusText.Text = "Paused · not watching";
+            WatchDot.Visibility = Visibility.Collapsed;
+            WatchDotHalo.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            var min = _secondsRemaining / 60;
+            var sec = _secondsRemaining % 60;
+            StatusText.Text = $"Watching · next look in {min}:{sec:D2}";
+            WatchDot.Visibility = Visibility.Visible;
+            WatchDotHalo.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void UpdateLookBar()
+    {
+        if (_paused)
+        {
+            LookBarScale.ScaleX = 0;
+            return;
+        }
+        var progress = 1.0 - (double)_secondsRemaining / TickSeconds;
+        LookBarScale.ScaleX = Math.Clamp(progress, 0, 1);
+    }
+
+    private void StartWatchDotPulse()
+    {
+        // 2.6s pulse — halo scales 1→3 while fading.
+        var scaleX = new DoubleAnimationUsingKeyFrames();
+        Storyboard.SetTarget(scaleX, WatchDotHaloScale);
+        Storyboard.SetTargetProperty(scaleX, "ScaleX");
+        scaleX.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 1.0 });
+        scaleX.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1820)), Value = 3.0, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        scaleX.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(2600)), Value = 3.0 });
+
+        var scaleY = new DoubleAnimationUsingKeyFrames();
+        Storyboard.SetTarget(scaleY, WatchDotHaloScale);
+        Storyboard.SetTargetProperty(scaleY, "ScaleY");
+        scaleY.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 1.0 });
+        scaleY.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1820)), Value = 3.0, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        scaleY.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(2600)), Value = 3.0 });
+
+        var opacity = new DoubleAnimationUsingKeyFrames();
+        Storyboard.SetTarget(opacity, WatchDotHalo);
+        Storyboard.SetTargetProperty(opacity, "Opacity");
+        opacity.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 0.55 });
+        opacity.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1820)), Value = 0.0, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+        opacity.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(2600)), Value = 0.0 });
+
+        _pulseStoryboard = new Storyboard
+        {
+            RepeatBehavior = RepeatBehavior.Forever,
+            Duration = TimeSpan.FromMilliseconds(2600),
+        };
+        _pulseStoryboard.Children.Add(scaleX);
+        _pulseStoryboard.Children.Add(scaleY);
+        _pulseStoryboard.Children.Add(opacity);
+        _pulseStoryboard.Begin();
+    }
+
+    // --- pause / chip event handlers ------------------------------------
+
+    private void OnPauseClick(object sender, RoutedEventArgs e)
+    {
+        _paused = !_paused;
+        if (_paused)
+        {
+            PauseIcon.Visibility = Visibility.Collapsed;
+            PlayIcon.Visibility = Visibility.Visible;
+            _pulseStoryboard?.Stop();
+        }
+        else
+        {
+            PauseIcon.Visibility = Visibility.Visible;
+            PlayIcon.Visibility = Visibility.Collapsed;
+            _pulseStoryboard?.Begin();
+            _secondsRemaining = TickSeconds; // restart the cycle on resume
+        }
+        UpdateStatus();
+        UpdateLookBar();
+    }
+
+    private void OnChipClick(object sender, RoutedEventArgs e)
+    {
+        // Only one chip selected at a time. If the user clicks the already-selected
+        // chip, snap it back on (no "all off" state).
+        if (sender is not ToggleButton clicked) return;
+
+        foreach (var chip in new[] { ChipAll, ChipSocial, ChipEfficiency })
+        {
+            chip.IsChecked = (chip == clicked);
+        }
+    }
+
+    // --- positioning -----------------------------------------------------
 
     private void PositionPanel()
     {
@@ -97,6 +237,10 @@ public sealed partial class PeekPanelWindow : Window
         var y = workArea.Y + workArea.Height - desiredHeight - bottomGapPx;
 
         _appWindow.MoveAndResize(new RectInt32(x, y, widthPx, desiredHeight));
+
+        // Update the look-bar clip width so the gradient still fills horizontally
+        // after the window resizes.
+        LookBarClip.Rect = new Windows.Foundation.Rect(0, 0, PanelWidth, 2);
     }
 
     private static int ScaleToPx(int designPx, uint dpi)
@@ -167,4 +311,5 @@ public sealed partial class PeekPanelWindow : Window
 
     [DllImport("Shcore.dll")]
     private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
 }
