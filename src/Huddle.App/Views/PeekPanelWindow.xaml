@@ -18,6 +18,7 @@
             <Color x:Key="AccentColorSoft">#9960CDFF</Color>
             <SolidColorBrush x:Key="SocialBrush" Color="#C58BFF"/>
             <SolidColorBrush x:Key="EfficiencyBrush" Color="#54D2A6"/>
+            <SolidColorBrush x:Key="AuroraAccentBrush" Color="#FF7AA4"/>
             <SolidColorBrush x:Key="T1" Color="#F0FFFFFF"/>
             <SolidColorBrush x:Key="T2" Color="#A8FFFFFF"/>
             <SolidColorBrush x:Key="T3" Color="#6BFFFFFF"/>
@@ -27,7 +28,9 @@
             <SolidColorBrush x:Key="ChipBg" Color="#0DFFFFFF"/>
             <SolidColorBrush x:Key="ChipBgHover" Color="#17FFFFFF"/>
             <SolidColorBrush x:Key="ChipBgOn" Color="#20FFFFFF"/>
-            <SolidColorBrush x:Key="ChipBorderOn" Color="#20FFFFFF"/>
+            <SolidColorBrush x:Key="TabBg" Color="#10FFFFFF"/>
+            <SolidColorBrush x:Key="TabBgHover" Color="#17FFFFFF"/>
+            <SolidColorBrush x:Key="TabBgOn" Color="#26FFFFFF"/>
 
             <!-- Header round buttons (pause, settings) -->
             <Style x:Key="HeaderButton" TargetType="Button">
@@ -75,39 +78,50 @@
                 </Setter>
             </Style>
 
-            <!-- Filter chips -->
-            <Style x:Key="Chip" TargetType="ToggleButton">
-                <Setter Property="Height" Value="27"/>
-                <Setter Property="Padding" Value="10,0,10,0"/>
-                <Setter Property="CornerRadius" Value="14"/>
-                <Setter Property="Background" Value="{StaticResource ChipBg}"/>
+            <!-- Tabs (Nudges / Activity) — chunky pill, accent border on selected -->
+            <Style x:Key="TabStyle" TargetType="ToggleButton">
+                <Setter Property="Height" Value="44"/>
+                <Setter Property="Padding" Value="14,0,14,0"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Background" Value="{StaticResource TabBg}"/>
                 <Setter Property="BorderBrush" Value="Transparent"/>
-                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderThickness" Value="0"/>
                 <Setter Property="Foreground" Value="{StaticResource T2}"/>
-                <Setter Property="FontSize" Value="12"/>
-                <Setter Property="FontWeight" Value="Medium"/>
-                <Setter Property="MinWidth" Value="0"/>
-                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ToggleButton">
-                            <Border x:Name="Root"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="{TemplateBinding CornerRadius}"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="Center"
-                                                  VerticalAlignment="Center"
-                                                  Content="{TemplateBinding Content}"
-                                                  Foreground="{TemplateBinding Foreground}"/>
+                            <Grid>
+                                <Border x:Name="Root"
+                                        Background="{TemplateBinding Background}"
+                                        CornerRadius="{TemplateBinding CornerRadius}"
+                                        Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter x:Name="Presenter"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Content="{TemplateBinding Content}"
+                                                      Foreground="{TemplateBinding Foreground}"/>
+                                </Border>
+                                <!-- Left accent strip when checked -->
+                                <Border x:Name="Accent"
+                                        Width="3"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Stretch"
+                                        Margin="0,8,0,8"
+                                        CornerRadius="2"
+                                        Background="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=BorderBrush}"
+                                        Opacity="0"/>
                                 <VisualStateManager.VisualStateGroups>
                                     <VisualStateGroup x:Name="CommonStates">
                                         <VisualState x:Name="Normal"/>
                                         <VisualState x:Name="PointerOver">
                                             <Storyboard>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource ChipBgHover}"/>
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource TabBgHover}"/>
                                                 </ObjectAnimationUsingKeyFrames>
                                             </Storyboard>
                                         </VisualState>
@@ -117,16 +131,17 @@
                                         <VisualState x:Name="Checked">
                                             <Storyboard>
                                                 <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource ChipBgOn}"/>
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource TabBgOn}"/>
                                                 </ObjectAnimationUsingKeyFrames>
-                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="BorderBrush">
-                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource ChipBorderOn}"/>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Presenter" Storyboard.TargetProperty="Foreground">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource T1}"/>
                                                 </ObjectAnimationUsingKeyFrames>
+                                                <DoubleAnimation Storyboard.TargetName="Accent" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.12"/>
                                             </Storyboard>
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
-                            </Border>
+                            </Grid>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
@@ -136,16 +151,14 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="2"/>      <!-- look-bar -->
             <RowDefinition Height="Auto"/>   <!-- header -->
-            <RowDefinition Height="Auto"/>   <!-- filters -->
-            <RowDefinition Height="*"/>      <!-- stream -->
+            <RowDefinition Height="Auto"/>   <!-- tabs -->
+            <RowDefinition Height="*"/>      <!-- content -->
         </Grid.RowDefinitions>
 
         <!-- ============== AURORA SHEEN ============== -->
         <!-- Two soft radial gradients layered above acrylic, mirroring the
              prototype's data-style aurora before pseudo-element. -->
         <Grid Grid.RowSpan="4" IsHitTestVisible="False" Opacity="0.9">
-            <!-- Top-right coral/pink wash, tied to the accent in aurora.
-                 The prototype mixes accent at 26%; approximated below. -->
             <Rectangle>
                 <Rectangle.Fill>
                     <RadialGradientBrush Center="0.85,-0.1"
@@ -158,7 +171,6 @@
                     </RadialGradientBrush>
                 </Rectangle.Fill>
             </Rectangle>
-            <!-- Bottom-left violet wash, tied to the social color. -->
             <Rectangle>
                 <Rectangle.Fill>
                     <RadialGradientBrush Center="-0.1,1.1"
@@ -232,7 +244,6 @@
             <!-- Buttons -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                 <Button x:Name="PauseBtn" Click="OnPauseClick" Style="{StaticResource HeaderButton}" ToolTipService.ToolTip="Pause">
-                    <!-- pause icon: two rounded rects -->
                     <Grid Width="16" Height="16">
                         <Path x:Name="PauseIcon" Fill="{StaticResource T2}"
                               Data="M4,3 H6.6 A1,1 0 0 1 7.6,4 V12 A1,1 0 0 1 6.6,13 H4 A1,1 0 0 1 3,12 V4 A1,1 0 0 1 4,3 Z M9.4,3 H12 A1,1 0 0 1 13,4 V12 A1,1 0 0 1 12,13 H9.4 A1,1 0 0 1 8.4,12 V4 A1,1 0 0 1 9.4,3 Z"/>
@@ -249,33 +260,103 @@
             </StackPanel>
         </Grid>
 
-        <!-- ============== FILTERS ============== -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6" Padding="14,0,14,10" Canvas.ZIndex="2">
-            <ToggleButton x:Name="ChipAll" Style="{StaticResource Chip}" IsChecked="True" Click="OnChipClick">
-                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <TextBlock Text="All"/>
-                    <TextBlock x:Name="CountAll" Text="0" Foreground="{StaticResource T3}" FontSize="11"/>
-                </StackPanel>
-            </ToggleButton>
-            <ToggleButton x:Name="ChipSocial" Style="{StaticResource Chip}" Click="OnChipClick">
-                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <Ellipse Width="7" Height="7" Fill="{StaticResource SocialBrush}"/>
-                    <TextBlock Text="Social ideas"/>
-                    <TextBlock x:Name="CountSocial" Text="0" Foreground="{StaticResource T3}" FontSize="11"/>
-                </StackPanel>
-            </ToggleButton>
-            <ToggleButton x:Name="ChipEfficiency" Style="{StaticResource Chip}" Click="OnChipClick">
-                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <Ellipse Width="7" Height="7" Fill="{StaticResource EfficiencyBrush}"/>
-                    <TextBlock Text="Efficiency"/>
-                    <TextBlock x:Name="CountEfficiency" Text="0" Foreground="{StaticResource T3}" FontSize="11"/>
-                </StackPanel>
-            </ToggleButton>
-        </StackPanel>
+        <!-- ============== TABS ============== -->
+        <Grid Grid.Row="2" Padding="14,0,14,10" Canvas.ZIndex="2" ColumnSpacing="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-        <!-- ============== STREAM / EMPTY ============== -->
+            <ToggleButton x:Name="TabNudges"
+                          Grid.Column="0"
+                          Style="{StaticResource TabStyle}"
+                          BorderBrush="{StaticResource SocialBrush}"
+                          Click="OnTabClick">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <!-- Lightbulb glyph -->
+                    <Path Width="14" Height="14"
+                          Fill="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=Foreground}"
+                          Data="M7 1.2 A4.4 4.4 0 0 0 4.2 9 V10.6 A0.8 0.8 0 0 0 5 11.4 H9 A0.8 0.8 0 0 0 9.8 10.6 V9 A4.4 4.4 0 0 0 7 1.2 Z M5.4 12.6 H8.6 V13.4 A0.6 0.6 0 0 1 8 14 H6 A0.6 0.6 0 0 1 5.4 13.4 Z"/>
+                    <TextBlock Text="Nudges"/>
+                    <TextBlock x:Name="CountNudges" Text="0" FontWeight="Normal" Opacity="0.65"/>
+                </StackPanel>
+            </ToggleButton>
+
+            <ToggleButton x:Name="TabActivity"
+                          Grid.Column="1"
+                          Style="{StaticResource TabStyle}"
+                          BorderBrush="{StaticResource AuroraAccentBrush}"
+                          Click="OnTabClick">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <!-- Pulse/activity glyph -->
+                    <Path Width="14" Height="14"
+                          Stroke="{Binding RelativeSource={RelativeSource Mode=TemplatedParent}, Path=Foreground}"
+                          StrokeThickness="1.5"
+                          Fill="Transparent"
+                          StrokeLineJoin="Round"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          Data="M1.5 7 H4 L5.2 3.6 L7 11 L8.6 5.6 L9.6 7 H12.5"/>
+                    <TextBlock Text="Activity"/>
+                    <TextBlock x:Name="CountActivity" Text="0" FontWeight="Normal" Opacity="0.65"/>
+                </StackPanel>
+            </ToggleButton>
+        </Grid>
+
+        <!-- ============== CONTENT AREA ============== -->
         <Grid Grid.Row="3" Canvas.ZIndex="2">
-            <StackPanel x:Name="EmptyState"
+
+            <!-- Activity tab content: section header + pattern cards -->
+            <Grid x:Name="ActivityContent">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Section header: ⊕ PATTERNS DETECTED N -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Padding="14,14,14,8" VerticalAlignment="Center">
+                    <!-- circled-plus glyph -->
+                    <Grid Width="14" Height="14" VerticalAlignment="Center">
+                        <Ellipse Stroke="{StaticResource T2}" StrokeThickness="1.2" Width="14" Height="14"/>
+                        <Path Stroke="{StaticResource T2}" StrokeThickness="1.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              Data="M7 4 V10 M4 7 H10"/>
+                    </Grid>
+                    <TextBlock Text="PATTERNS DETECTED"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource T2}"
+                               CharacterSpacing="80"
+                               VerticalAlignment="Center"/>
+                    <TextBlock x:Name="PatternCountText"
+                               Text="0"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource T3}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Pattern cards -->
+                <ScrollViewer Grid.Row="1"
+                              HorizontalScrollMode="Disabled"
+                              VerticalScrollMode="Auto"
+                              VerticalScrollBarVisibility="Auto"
+                              Padding="14,0,14,14">
+                    <ItemsRepeater x:Name="PatternsRepeater">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Orientation="Vertical" Spacing="9"/>
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate>
+                                <controls:PatternCard Pattern="{Binding}"/>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Nudges tab content: empty state -->
+            <StackPanel x:Name="NudgesContent"
+                        Visibility="Collapsed"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Top"
                         Margin="24,40,24,24"

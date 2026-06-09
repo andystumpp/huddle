@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="Huddle.Controls.PatternCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Huddle.Controls">
+
+    <Border CornerRadius="10"
+            Background="#0BFFFFFF"
+            BorderBrush="#12FFFFFF"
+            BorderThickness="1"
+            Padding="13">
+        <StackPanel Spacing="6">
+            <TextBlock x:Name="TitleText"
+                       FontWeight="SemiBold"
+                       FontSize="14"
+                       Foreground="#F0FFFFFF"
+                       TextWrapping="NoWrap"
+                       TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="DescriptionText"
+                       FontSize="12.5"
+                       LineHeight="18"
+                       Foreground="#C8FFFFFF"
+                       TextWrapping="Wrap"/>
+            <StackPanel x:Name="SourceApps"
+                        Orientation="Horizontal"
+                        Spacing="7"
+                        Margin="0,4,0,0"/>
+        </StackPanel>
+    </Border>
+</UserControl>

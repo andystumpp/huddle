@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Graphics;
 using WinRT.Interop;
+using Huddle.Models;
 
 namespace Huddle.Views;
 
@@ -62,6 +63,18 @@ public sealed partial class PeekPanelWindow : Window
         UpdateStatus();
         UpdateLookBar();
         _tickTimer.Start();
+
+        // Wire up the tabs + counts + content.
+        PatternsRepeater.ItemsSource = PatternSeed.All;
+        CountActivity.Text = PatternSeed.All.Count.ToString();
+        CountNudges.Text = "0";
+
+        // Default selected tab: Activity.
+        TabActivity.IsChecked = true;
+        TabNudges.IsChecked = false;
+        UpdateTabSurface();
+
+        PatternCountText.Text = PatternSeed.All.Count.ToString();
     }
 
     public void ShowPanel()
@@ -203,16 +216,22 @@ public sealed partial class PeekPanelWindow : Window
         UpdateLookBar();
     }
 
-    private void OnChipClick(object sender, RoutedEventArgs e)
+    private void OnTabClick(object sender, RoutedEventArgs e)
     {
-        // Only one chip selected at a time. If the user clicks the already-selected
-        // chip, snap it back on (no "all off" state).
+        // Force exactly one tab selected — clicking the already-selected tab
+        // keeps it selected (no "both off" state).
         if (sender is not ToggleButton clicked) return;
 
-        foreach (var chip in new[] { ChipAll, ChipSocial, ChipEfficiency })
-        {
-            chip.IsChecked = (chip == clicked);
-        }
+        TabNudges.IsChecked = (clicked == TabNudges);
+        TabActivity.IsChecked = (clicked == TabActivity);
+        UpdateTabSurface();
+    }
+
+    private void UpdateTabSurface()
+    {
+        var nudgesSelected = TabNudges.IsChecked == true;
+        NudgesContent.Visibility = nudgesSelected ? Visibility.Visible : Visibility.Collapsed;
+        ActivityContent.Visibility = nudgesSelected ? Visibility.Collapsed : Visibility.Visible;
     }
 
     // --- positioning -----------------------------------------------------

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="Huddle.Controls.AppTile"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Border x:Name="TileBorder"
+            CornerRadius="6"
+            Background="#2A2D33">
+        <TextBlock x:Name="MonogramText"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Foreground="White"
+                   FontWeight="Bold"
+                   CharacterSpacing="-30"/>
+    </Border>
+</UserControl>
