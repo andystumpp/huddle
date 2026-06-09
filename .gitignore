@@ -1,4 +1,8 @@
 # .NET / WinUI build outputs
+# Secrets — don't commit
+huddle.env
+.env
+
 bin/
 obj/
 *.user

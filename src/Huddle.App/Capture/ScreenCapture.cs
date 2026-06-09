@@ -1,0 +1,193 @@
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using Windows.Graphics.Imaging;
+using Windows.Storage.Streams;
+
+namespace Huddle.Capture;
+
+/// <summary>
+/// Captures the primary display via Win32 BitBlt and encodes as JPEG.
+/// </summary>
+internal static class ScreenCapture
+{
+    /// <param name="maxLongEdge">Longest edge of the resized image, in pixels.</param>
+    /// <param name="qualityPercent">JPEG quality, 1-100.</param>
+    public static async Task<byte[]> CaptureAsJpegAsync(
+        int maxLongEdge = 1280,
+        int qualityPercent = 80)
+    {
+        try
+        {
+            (byte[] bgra, int width, int height) = GrabPrimaryDisplayBgra();
+            return await EncodeToJpegAsync(bgra, width, height, maxLongEdge, qualityPercent)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not ScreenCaptureException)
+        {
+            throw new ScreenCaptureException("Capture failed.", ex);
+        }
+    }
+
+    private static (byte[] bgra, int width, int height) GrabPrimaryDisplayBgra()
+    {
+        int width = GetSystemMetrics(SM_CXSCREEN);
+        int height = GetSystemMetrics(SM_CYSCREEN);
+        if (width <= 0 || height <= 0)
+        {
+            throw new ScreenCaptureException($"Invalid screen size: {width}x{height}.");
+        }
+
+        IntPtr screenDc = GetDC(IntPtr.Zero);
+        if (screenDc == IntPtr.Zero) throw new ScreenCaptureException("GetDC failed.");
+
+        IntPtr memDc = IntPtr.Zero;
+        IntPtr hBitmap = IntPtr.Zero;
+        try
+        {
+            memDc = CreateCompatibleDC(screenDc);
+            if (memDc == IntPtr.Zero) throw new ScreenCaptureException("CreateCompatibleDC failed.");
+
+            hBitmap = CreateCompatibleBitmap(screenDc, width, height);
+            if (hBitmap == IntPtr.Zero) throw new ScreenCaptureException("CreateCompatibleBitmap failed.");
+
+            IntPtr oldBitmap = SelectObject(memDc, hBitmap);
+            try
+            {
+                if (!BitBlt(memDc, 0, 0, width, height, screenDc, 0, 0, SRCCOPY))
+                {
+                    throw new ScreenCaptureException("BitBlt failed.");
+                }
+            }
+            finally
+            {
+                SelectObject(memDc, oldBitmap);
+            }
+
+            var bmi = new BITMAPINFO
+            {
+                bmiHeader = new BITMAPINFOHEADER
+                {
+                    biSize = Marshal.SizeOf<BITMAPINFOHEADER>(),
+                    biWidth = width,
+                    biHeight = -height,         // negative = top-down
+                    biPlanes = 1,
+                    biBitCount = 32,
+                    biCompression = BI_RGB,
+                },
+            };
+            var bgra = new byte[width * height * 4];
+            int scanlines = GetDIBits(
+                screenDc, hBitmap, 0, (uint)height, bgra, ref bmi, DIB_RGB_COLORS);
+            if (scanlines == 0)
+            {
+                throw new ScreenCaptureException("GetDIBits returned 0 scanlines.");
+            }
+            return (bgra, width, height);
+        }
+        finally
+        {
+            if (hBitmap != IntPtr.Zero) DeleteObject(hBitmap);
+            if (memDc != IntPtr.Zero) DeleteDC(memDc);
+            ReleaseDC(IntPtr.Zero, screenDc);
+        }
+    }
+
+    private static async Task<byte[]> EncodeToJpegAsync(
+        byte[] bgra, int srcWidth, int srcHeight, int maxLongEdge, int qualityPercent)
+    {
+        int longEdge = Math.Max(srcWidth, srcHeight);
+        double scale = longEdge > maxLongEdge ? (double)maxLongEdge / longEdge : 1.0;
+        uint targetWidth = (uint)Math.Max(1, Math.Round(srcWidth * scale));
+        uint targetHeight = (uint)Math.Max(1, Math.Round(srcHeight * scale));
+
+        using var stream = new InMemoryRandomAccessStream();
+        var propertySet = new BitmapPropertySet
+        {
+            ["ImageQuality"] = new BitmapTypedValue(
+                qualityPercent / 100.0, Windows.Foundation.PropertyType.Single),
+        };
+        var encoder = await BitmapEncoder.CreateAsync(
+            BitmapEncoder.JpegEncoderId, stream, propertySet);
+
+        encoder.SetPixelData(
+            BitmapPixelFormat.Bgra8,
+            BitmapAlphaMode.Ignore,
+            (uint)srcWidth,
+            (uint)srcHeight,
+            96.0, 96.0,
+            bgra);
+
+        if (targetWidth != srcWidth || targetHeight != srcHeight)
+        {
+            encoder.BitmapTransform.ScaledWidth = targetWidth;
+            encoder.BitmapTransform.ScaledHeight = targetHeight;
+            encoder.BitmapTransform.InterpolationMode = BitmapInterpolationMode.Fant;
+        }
+
+        await encoder.FlushAsync();
+
+        stream.Seek(0);
+        var buffer = new byte[stream.Size];
+        using var reader = new DataReader(stream.GetInputStreamAt(0));
+        await reader.LoadAsync((uint)stream.Size);
+        reader.ReadBytes(buffer);
+        return buffer;
+    }
+
+    // --- P/Invoke ---
+
+    private const int SM_CXSCREEN = 0;
+    private const int SM_CYSCREEN = 1;
+    private const uint SRCCOPY = 0x00CC0020;
+    private const int BI_RGB = 0;
+    private const uint DIB_RGB_COLORS = 0;
+
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int nIndex);
+    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+    [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr hdc);
+    [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleBitmap(IntPtr hdc, int nWidth, int nHeight);
+    [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr hdc, IntPtr hgdiobj);
+    [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr hObject);
+    [DllImport("gdi32.dll")] private static extern bool BitBlt(
+        IntPtr hdcDest, int xDest, int yDest, int wDest, int hDest,
+        IntPtr hdcSrc, int xSrc, int ySrc, uint dwRop);
+
+    [DllImport("gdi32.dll")]
+    private static extern int GetDIBits(
+        IntPtr hdc, IntPtr hbmp, uint uStartScan, uint cScanLines,
+        [Out] byte[] lpvBits, ref BITMAPINFO lpbi, uint uUsage);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFOHEADER
+    {
+        public int biSize;
+        public int biWidth;
+        public int biHeight;
+        public ushort biPlanes;
+        public ushort biBitCount;
+        public uint biCompression;
+        public uint biSizeImage;
+        public int biXPelsPerMeter;
+        public int biYPelsPerMeter;
+        public uint biClrUsed;
+        public uint biClrImportant;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFO
+    {
+        public BITMAPINFOHEADER bmiHeader;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 1024)]
+        public byte[] bmiColors;
+    }
+}
+
+internal sealed class ScreenCaptureException : Exception
+{
+    public ScreenCaptureException(string message) : base(message) { }
+    public ScreenCaptureException(string message, Exception inner) : base(message, inner) { }
+}

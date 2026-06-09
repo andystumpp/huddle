@@ -8,9 +8,12 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using System.Collections.Generic;
 using Windows.Graphics;
 using WinRT.Interop;
+using Huddle.Capture;
 using Huddle.Models;
+using Huddle.Vision;
 
 namespace Huddle.Views;
 
@@ -232,6 +235,150 @@ public sealed partial class PeekPanelWindow : Window
         var nudgesSelected = TabNudges.IsChecked == true;
         NudgesContent.Visibility = nudgesSelected ? Visibility.Visible : Visibility.Collapsed;
         ActivityContent.Visibility = nudgesSelected ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // --- snapshot trigger ----------------------------------------------------
+
+    private static readonly SolidColorBrush s_errorBrush =
+        new(Windows.UI.Color.FromArgb(0xFF, 0xFF, 0x7A, 0xA4)); // soft coral
+    private static readonly SolidColorBrush s_okBrush =
+        new(Windows.UI.Color.FromArgb(0xFF, 0x54, 0xD2, 0xA6)); // efficiency teal
+
+    private async void OnSnapshotClick(object sender, RoutedEventArgs e)
+    {
+        SnapshotBtn.IsEnabled = false;
+        SnapshotBtn.Opacity = 0.4;
+        ShowStatus("Working...", isError: false);
+
+        string app = "Unknown";
+        string title = string.Empty;
+
+        try
+        {
+            var apiKey = ResolveApiKey();
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                ShowStatus("Set ANTHROPIC_API_KEY", isError: true);
+                await MomentLog.AppendFailureAsync(app, title, "ANTHROPIC_API_KEY not set");
+                return;
+            }
+
+            var foreground = ForegroundContext.Read();
+            app = foreground.App;
+            title = foreground.WindowTitle;
+
+            byte[] jpeg = await ScreenCapture.CaptureAsJpegAsync();
+            string summary = await MomentExtractor.ExtractAsync(jpeg, foreground);
+
+            var moment = new Moment(
+                UlidGenerator.Generate(),
+                DateTimeOffset.UtcNow,
+                foreground.App,
+                foreground.WindowTitle,
+                summary);
+            await MomentLog.AppendSuccessAsync(moment);
+
+            ShowStatus("Saved", isError: false);
+        }
+        catch (Exception ex)
+        {
+            string message = ex.Message.Length > 60
+                ? ex.Message.Substring(0, 60) + "..."
+                : ex.Message;
+            ShowStatus($"Error: {message}", isError: true);
+            await MomentLog.AppendFailureAsync(app, title, ex.Message);
+        }
+        finally
+        {
+            SnapshotBtn.IsEnabled = true;
+            SnapshotBtn.Opacity = 1.0;
+        }
+    }
+
+    /// <summary>
+    /// Resolve the API key in this order:
+    /// 1. Process env (`ANTHROPIC_API_KEY`) — what the SDK reads by default.
+    /// 2. User env target (registry — what `setx` writes).
+    /// 3. A `huddle.env` file next to `Huddle.exe`.
+    /// 4. A `huddle.env` file at `%LOCALAPPDATA%\Huddle\`.
+    /// Whichever wins is promoted into the process env so the SDK sees it on subsequent calls.
+    /// </summary>
+    private static string? ResolveApiKey()
+    {
+        var key = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+        if (!string.IsNullOrWhiteSpace(key)) return key;
+
+        try
+        {
+            key = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY", EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", key);
+                return key;
+            }
+        }
+        catch { /* registry can throw in restricted contexts */ }
+
+        foreach (var path in EnvFileCandidates())
+        {
+            key = ReadKeyFromEnvFile(path, "ANTHROPIC_API_KEY");
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", key);
+                return key;
+            }
+        }
+        return null;
+    }
+
+    private static IEnumerable<string> EnvFileCandidates()
+    {
+        var exeDir = AppContext.BaseDirectory;
+        if (!string.IsNullOrWhiteSpace(exeDir))
+        {
+            yield return System.IO.Path.Combine(exeDir, "huddle.env");
+        }
+        var localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrWhiteSpace(localApp))
+        {
+            yield return System.IO.Path.Combine(localApp, "Huddle", "huddle.env");
+        }
+    }
+
+    private static string? ReadKeyFromEnvFile(string path, string name)
+    {
+        try
+        {
+            if (!System.IO.File.Exists(path)) return null;
+            foreach (var rawLine in System.IO.File.ReadAllLines(path))
+            {
+                var line = rawLine.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                int eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                var k = line.Substring(0, eq).Trim();
+                if (!string.Equals(k, name, StringComparison.OrdinalIgnoreCase)) continue;
+                var v = line.Substring(eq + 1).Trim();
+                if (v.Length >= 2 && ((v[0] == '"' && v[^1] == '"') || (v[0] == '\'' && v[^1] == '\'')))
+                {
+                    v = v.Substring(1, v.Length - 2);
+                }
+                return v;
+            }
+        }
+        catch { /* unreadable env file — ignore */ }
+        return null;
+    }
+
+    /// <summary>
+    /// Shows the snapshot status next to the section header. Stays visible
+    /// until the next click — easier to read than a brief auto-hiding flash.
+    /// </summary>
+    private void ShowStatus(string text, bool isError)
+    {
+        SnapshotStatusText.Text = text;
+        SnapshotStatusText.Foreground = isError ? s_errorBrush : s_okBrush;
+        SnapshotStatusText.Visibility = Visibility.Visible;
     }
 
     // --- positioning -----------------------------------------------------
