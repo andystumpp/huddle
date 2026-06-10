@@ -14,6 +14,7 @@ internal static class ScenarioRegistry
     {
         new LinkedInPostsScenario(),
         new AchievementsScenario(),
+        new LearningsScenario(),
     };
 
     public static Scenario? GetByKey(string key) =>
