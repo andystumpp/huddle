@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Huddle.Views.PeekTabWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The OS clamps top-level windows to a minimum width (~133px), wider
+         than the 28-dip chip we ask for — only the left 28 dip are on screen.
+         So everything is anchored LEFT, never centered in the window. The
+         rounded shape is carved by SetWindowRgn in code-behind. -->
+    <Grid RequestedTheme="Dark">
+        <Border Width="28"
+                HorizontalAlignment="Left"
+                Background="#F01C1E2A">
+            <Grid>
+                <Ellipse x:Name="PulseHalo"
+                         Width="22" Height="22"
+                         Fill="#C58BFF"
+                         Opacity="0"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center"
+                         RenderTransformOrigin="0.5,0.5">
+                    <Ellipse.RenderTransform>
+                        <ScaleTransform x:Name="PulseScale" ScaleX="1" ScaleY="1"/>
+                    </Ellipse.RenderTransform>
+                </Ellipse>
+                <TextBlock x:Name="CountText"
+                           Text="0"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="White"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

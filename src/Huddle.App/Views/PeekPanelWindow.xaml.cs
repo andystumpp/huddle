@@ -25,11 +25,18 @@ public sealed partial class PeekPanelWindow : Window
 {
     private const int PanelWidth = 384;
     private const int RightGap = 12;
+    private const int TopGap = 12;
     private const int BottomGap = 12;
-    private const int HeightHeadroom = 84;
-    private const int DesiredHeight = 460;
+    private const int MinPanelHeight = 320;
     private const int MaxVisibleMoments = 20;
     private const int MaxVisibleNudges = 20;
+
+    // Slide / hover constants.
+    private const int HideDelayMs = 700;        // cursor-off grace before sliding out
+    private const int SlideDurationMs = 220;
+    private const int SlideTickMs = 16;
+    private const int HoverGrowPx = 8;          // extra pixels around the tab that still trigger show
+    private const int ReadGraceMs = 3000;       // panel must stay open this long before unread → 0
 
     private readonly IntPtr _hwnd;
     private readonly AppWindow _appWindow;
@@ -37,10 +44,38 @@ public sealed partial class PeekPanelWindow : Window
     private readonly ObservableCollection<Moment> _moments = new();
     private readonly ObservableCollection<Nudge> _nudges = new();
 
+    private PeekTabWindow? _tab;
+
     private Storyboard? _pulseStoryboard;
     private DispatcherTimer? _statusTimer;
     private bool _pausedByLock;
     private SessionSwitchEventHandler? _sessionSwitchHandler;
+
+    // Cached panel geometry (set by PositionPanel).
+    private int _panelY;
+    private int _panelHeightPx;
+    private int _panelWidthPx;
+    private int _visibleX;
+    private int _hiddenX;
+    private int _workAreaRight;
+
+    // Cached tab-window rect (set by PositionTab).
+    private int _tabX, _tabY, _tabW, _tabH;
+    private uint _lastDpi = 96;
+
+    // Slide / hover state.
+    private DispatcherTimer? _slideTimer;
+    private DispatcherTimer? _hoverTimer;
+    private DateTime _slideStartUtc;
+    private int _slideFromX;
+    private int _slideToX;
+    private bool _isVisible = true;
+    private DateTime? _leftPanelAtUtc;
+
+    // Unread tracking — the chip shows nudges since the last "read."
+    private int _unreadNudges;
+    private bool _panelSeenForWhile;
+    private DispatcherTimer? _readTimer;
 
     public PeekPanelWindow()
     {
@@ -113,6 +148,23 @@ public sealed partial class PeekPanelWindow : Window
             DispatcherQueue.TryEnqueue(() => HandleSessionSwitch(args));
         };
         SystemEvents.SessionSwitch += _sessionSwitchHandler;
+
+        // Spin up the peek-tab window (the count badge that lives at the right
+        // edge whenever the panel is hidden). Created here so PositionPanel has
+        // already cached the work-area rect.
+        _tab = new PeekTabWindow();
+        _tab.UpdateCount(_unreadNudges);
+        PositionPanel(); // recompute now that _tab exists, so its rect is set
+        // Show once (without activation) so the XAML visual tree is realized,
+        // then immediately hide. Without this first paint, subsequent Show()
+        // calls leave the chip empty (no text, no halo) on WinUI 3.
+        _tab.PeekAppWindow.Show(activateWindow: false);
+        _tab.PeekAppWindow.Hide();
+
+        StartHoverWatch();
+        // Panel starts visible — kick off the read-grace timer so the chip
+        // doesn't pulse from the moment the user first hides the panel.
+        StartReadTimer();
     }
 
     private void OnWindowClosed(object sender, WindowEventArgs e)
@@ -122,6 +174,14 @@ public sealed partial class PeekPanelWindow : Window
             SystemEvents.SessionSwitch -= _sessionSwitchHandler;
             _sessionSwitchHandler = null;
         }
+
+        _hoverTimer?.Stop();
+        _slideTimer?.Stop();
+        _statusTimer?.Stop();
+        _readTimer?.Stop();
+
+        _tab?.Close();
+        _tab = null;
     }
 
     private void HandleSessionSwitch(SessionSwitchEventArgs e)
@@ -179,6 +239,11 @@ public sealed partial class PeekPanelWindow : Window
             presenter.IsMaximizable = false;
             presenter.IsAlwaysOnTop = true;
         }
+
+        // Round the window surface itself (acrylic included) — borderless
+        // windows lose Win11's default rounding, so request it explicitly.
+        int cornerPreference = DWMWCP_ROUND;
+        DwmSetWindowAttribute(_hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPreference, sizeof(int));
     }
 
     private void TrySetAcrylicBackdrop()
@@ -323,6 +388,7 @@ public sealed partial class PeekPanelWindow : Window
             {
                 _nudges.RemoveAt(_nudges.Count - 1);
             }
+            if (!_panelSeenForWhile) _unreadNudges++;
             UpdateNudgesSurface();
         }
     }
@@ -334,6 +400,7 @@ public sealed partial class PeekPanelWindow : Window
         NudgesScroll.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         CountNudges.Text = _nudges.Count.ToString();
         NudgeCountText.Text = _nudges.Count.ToString();
+        _tab?.UpdateCount(_unreadNudges);
     }
 
     private async void OnRunScenariosNowClick(object sender, RoutedEventArgs e)
@@ -362,6 +429,7 @@ public sealed partial class PeekPanelWindow : Window
                     {
                         _nudges.RemoveAt(_nudges.Count - 1);
                     }
+                    if (!_panelSeenForWhile) _unreadNudges++;
                     emitted++;
                 }
                 else
@@ -460,23 +528,189 @@ public sealed partial class PeekPanelWindow : Window
         {
             return;
         }
+        _lastDpi = dpi;
 
         var widthPx = ScaleToPx(PanelWidth, dpi);
         var rightGapPx = ScaleToPx(RightGap, dpi);
+        var topGapPx = ScaleToPx(TopGap, dpi);
         var bottomGapPx = ScaleToPx(BottomGap, dpi);
-        var headroomPx = ScaleToPx(HeightHeadroom, dpi);
+        var minHeightPx = ScaleToPx(MinPanelHeight, dpi);
 
-        var maxHeight = workArea.Height - headroomPx;
-        var desiredHeight = Math.Min(maxHeight, ScaleToPx(DesiredHeight, dpi));
-        if (desiredHeight < ScaleToPx(80, dpi)) desiredHeight = ScaleToPx(80, dpi);
+        var heightPx = workArea.Height - topGapPx - bottomGapPx;
+        if (heightPx < minHeightPx) heightPx = minHeightPx;
 
-        var x = workArea.X + workArea.Width - widthPx - rightGapPx;
-        var y = workArea.Y + workArea.Height - desiredHeight - bottomGapPx;
+        _panelWidthPx = widthPx;
+        _panelHeightPx = heightPx;
+        _panelY = workArea.Y + topGapPx;
+        _workAreaRight = workArea.X + workArea.Width;
+        _visibleX = _workAreaRight - widthPx - rightGapPx;
+        // Hidden state: panel parked fully off the right edge of the work area.
+        _hiddenX = _workAreaRight;
 
-        _appWindow.MoveAndResize(new RectInt32(x, y, widthPx, desiredHeight));
+        var startX = _isVisible ? _visibleX : _hiddenX;
+        _appWindow.MoveAndResize(new RectInt32(startX, _panelY, widthPx, heightPx));
 
         LookBarClip.Rect = new Windows.Foundation.Rect(0, 0, PanelWidth, 2);
+
+        // Tab window — anchored so its left 28 dip sit on screen at the right
+        // edge, vertically centered. The OS clamps the actual window wider
+        // than requested (~133px min track width); the excess hangs off-screen
+        // and the chip content is left-anchored in XAML, so that's harmless.
+        var tabW = ScaleToPx(PeekTabWindow.VisibleWidthDip, dpi);
+        var tabH = ScaleToPx(PeekTabWindow.HeightDip, dpi);
+        _tabW = tabW;
+        _tabH = tabH;
+        _tabX = _workAreaRight - tabW;
+        _tabY = workArea.Y + (workArea.Height - tabH) / 2;
+        _tab?.PeekAppWindow.MoveAndResize(new RectInt32(_tabX, _tabY, tabW, tabH));
+        _tab?.ApplyRoundedRegion(tabW, tabH, ScaleToPx(PeekTabWindow.CornerRadiusDip, dpi));
     }
+
+    // --- slide / hover --------------------------------------------------
+
+    private void StartHoverWatch()
+    {
+        if (_hoverTimer is not null) return;
+        _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(60) };
+        _hoverTimer.Tick += (_, _) => UpdateHoverState();
+        _hoverTimer.Start();
+    }
+
+    private void UpdateHoverState()
+    {
+        if (_panelHeightPx == 0) return; // PositionPanel hasn't run yet
+        if (!GetCursorPos(out var pt)) return;
+
+        bool inPanelYBand = pt.Y >= _panelY && pt.Y <= _panelY + _panelHeightPx;
+
+        if (_isVisible)
+        {
+            // Auto-hide once the cursor sits outside the panel's visible bounds
+            // (using _visibleX so an in-progress slide-in doesn't self-cancel).
+            bool overPanel = inPanelYBand && pt.X >= _visibleX && pt.X <= _workAreaRight;
+            if (overPanel)
+            {
+                _leftPanelAtUtc = null;
+            }
+            else
+            {
+                _leftPanelAtUtc ??= DateTime.UtcNow;
+                if ((DateTime.UtcNow - _leftPanelAtUtc.Value).TotalMilliseconds >= HideDelayMs)
+                {
+                    Slide(toVisible: false);
+                }
+            }
+        }
+        else
+        {
+            // Show when the cursor enters the tab window's rect (grown a bit
+            // for forgiveness, especially on the screen-edge side).
+            bool overTab = pt.X >= _tabX - HoverGrowPx
+                        && pt.X <= _workAreaRight
+                        && pt.Y >= _tabY - HoverGrowPx
+                        && pt.Y <= _tabY + _tabH + HoverGrowPx;
+            if (overTab)
+            {
+                Slide(toVisible: true);
+            }
+        }
+    }
+
+    private void Slide(bool toVisible)
+    {
+        var targetX = toVisible ? _visibleX : _hiddenX;
+        var currentX = _appWindow.Position.X;
+        _isVisible = toVisible;
+        _leftPanelAtUtc = null;
+
+        // Hide the tab window immediately on slide-in so it's gone before the
+        // panel arrives. (On slide-out we surface it at the end of the animation.)
+        if (toVisible)
+        {
+            _tab?.PeekAppWindow.Hide();
+            StartReadTimer();
+        }
+        else
+        {
+            _readTimer?.Stop();
+            _panelSeenForWhile = false;
+        }
+
+        if (currentX == targetX)
+        {
+            if (!toVisible) ShowTab();
+            return;
+        }
+
+        _slideFromX = currentX;
+        _slideToX = targetX;
+        _slideStartUtc = DateTime.UtcNow;
+
+        if (_slideTimer is null)
+        {
+            _slideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(SlideTickMs) };
+            _slideTimer.Tick += (_, _) => OnSlideTick();
+        }
+        _slideTimer.Start();
+    }
+
+    private void OnSlideTick()
+    {
+        var elapsed = (DateTime.UtcNow - _slideStartUtc).TotalMilliseconds;
+        var t = Math.Clamp(elapsed / SlideDurationMs, 0.0, 1.0);
+        // ease-out cubic
+        var eased = 1.0 - Math.Pow(1.0 - t, 3);
+        var x = (int)Math.Round(_slideFromX + (_slideToX - _slideFromX) * eased);
+
+        _appWindow.Move(new PointInt32(x, _panelY));
+
+        if (t >= 1.0)
+        {
+            _slideTimer!.Stop();
+            if (!_isVisible)
+            {
+                ShowTab();
+            }
+        }
+    }
+
+    private void ShowTab()
+    {
+        if (_tab is null || _tabW == 0) return;
+        _tab.PeekAppWindow.MoveAndResize(new RectInt32(_tabX, _tabY, _tabW, _tabH));
+        _tab.PeekAppWindow.Show(activateWindow: false);
+        // Keep the tab above other windows even when the panel isn't topmost.
+        SetWindowPos(_tab.Hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
+    private void StartReadTimer()
+    {
+        if (_readTimer is null)
+        {
+            _readTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ReadGraceMs) };
+            _readTimer.Tick += (_, _) => OnReadGraceElapsed();
+        }
+        _readTimer.Stop();
+        _readTimer.Start();
+    }
+
+    private void OnReadGraceElapsed()
+    {
+        _readTimer?.Stop();
+        if (!_isVisible) return; // belt-and-braces: panel slid out during the grace
+        _panelSeenForWhile = true;
+        if (_unreadNudges != 0)
+        {
+            _unreadNudges = 0;
+            _tab?.UpdateCount(0);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X; public int Y; }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT lpPoint);
 
     private static int ScaleToPx(int designPx, uint dpi)
     {
@@ -522,6 +756,8 @@ public sealed partial class PeekPanelWindow : Window
     private const uint SWP_NOACTIVATE = 0x0010;
     private const int MONITOR_DEFAULTTOPRIMARY = 0x00000001;
     private const int MDT_EFFECTIVE_DPI = 0;
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private const int DWMWCP_ROUND = 2;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT { public int Left, Top, Right, Bottom; }
@@ -546,4 +782,7 @@ public sealed partial class PeekPanelWindow : Window
 
     [DllImport("Shcore.dll")]
     private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
 }
