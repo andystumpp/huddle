@@ -6,7 +6,7 @@
     xmlns:controls="using:Huddle.Controls">
 
     <Grid x:Name="RootClip"
-          CornerRadius="13"
+          CornerRadius="8"
           BorderThickness="1"
           BorderBrush="#1AFFFFFF"
           Background="Transparent"
@@ -455,5 +455,6 @@
                 </Grid>
             </Grid>
         </Grid>
+
     </Grid>
 </Window>
