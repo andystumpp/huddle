@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using Anthropic.Models.Messages;
 using Huddle.Models;
 
 namespace Huddle.Scenarios;
@@ -21,6 +22,9 @@ internal abstract class Scenario
     public abstract TimeSpan Cadence { get; }
     public abstract int TrailSize { get; }
     public virtual int PriorNudgesSize => 10;
+
+    /// <summary>The Claude model used for this scenario's call. Sonnet by default.</summary>
+    public virtual Model ModelId => Model.ClaudeSonnet4_6;
 
     private DateTimeOffset _lastRun = DateTimeOffset.MinValue;
     private readonly SemaphoreSlim _gate = new(1, 1);

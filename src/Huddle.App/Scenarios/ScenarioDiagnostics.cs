@@ -12,6 +12,7 @@ internal static class ScenarioDiagnostics
 {
     public static void LogRun(
         string scenarioKey,
+        string modelLabel,
         string systemPrompt,
         string userText,
         string? response,
@@ -28,7 +29,7 @@ internal static class ScenarioDiagnostics
 
             var sb = new StringBuilder();
             sb.AppendLine("=================================================================");
-            sb.AppendLine($"[{DateTimeOffset.UtcNow:o}] scenario={scenarioKey} model=claude-sonnet-4-6");
+            sb.AppendLine($"[{DateTimeOffset.UtcNow:o}] scenario={scenarioKey} model={modelLabel}");
             sb.AppendLine($"usage: input={inputTokens?.ToString() ?? "?"} output={outputTokens?.ToString() ?? "?"}");
             sb.AppendLine("--- system prompt ---");
             sb.AppendLine(systemPrompt);
