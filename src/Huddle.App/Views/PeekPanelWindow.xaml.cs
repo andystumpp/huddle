@@ -418,8 +418,10 @@ public sealed partial class PeekPanelWindow : Window
             foreach (var scenario in ScenarioRegistry.All)
             {
                 var trail = await MomentStore.RecentAsync(scenario.TrailSize);
-                var priorNudges = await NudgeStore.RecentByScenarioAsync(scenario.Key, scenario.PriorNudgesSize);
-                var result = await scenario.RunAsync(trail, priorNudges);
+                // Manual runs pass no prior nudges so dedup never suppresses
+                // output — "Run now" is for eval, and a forced result beats
+                // silence. Scheduled runs still dedup (see RunScenariosAsync).
+                var result = await scenario.RunAsync(trail, Array.Empty<Nudge>());
 
                 if (result.Nudge is not null)
                 {
