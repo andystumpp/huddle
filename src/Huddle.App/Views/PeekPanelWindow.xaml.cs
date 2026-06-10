@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using Microsoft.Win32;
 using Windows.Graphics;
 using WinRT.Interop;
 using Huddle.Capture;
@@ -38,6 +39,8 @@ public sealed partial class PeekPanelWindow : Window
 
     private Storyboard? _pulseStoryboard;
     private DispatcherTimer? _statusTimer;
+    private bool _pausedByLock;
+    private SessionSwitchEventHandler? _sessionSwitchHandler;
 
     public PeekPanelWindow()
     {
@@ -57,6 +60,8 @@ public sealed partial class PeekPanelWindow : Window
         {
             fe.Loaded += OnContentLoaded;
         }
+
+        Closed += OnWindowClosed;
     }
 
     private async void OnContentLoaded(object sender, RoutedEventArgs e)
@@ -99,6 +104,58 @@ public sealed partial class PeekPanelWindow : Window
         // Start the real capture tick (fires once immediately, then every 180 s).
         _scheduler.Tick += OnSchedulerTick;
         _scheduler.Start();
+
+        // Listen for workstation lock / unlock so we can auto-pause and
+        // auto-resume. SystemEvents fires on a background thread; marshal back
+        // to the UI thread before touching scheduler/UI state.
+        _sessionSwitchHandler = (_, args) =>
+        {
+            DispatcherQueue.TryEnqueue(() => HandleSessionSwitch(args));
+        };
+        SystemEvents.SessionSwitch += _sessionSwitchHandler;
+    }
+
+    private void OnWindowClosed(object sender, WindowEventArgs e)
+    {
+        if (_sessionSwitchHandler is not null)
+        {
+            SystemEvents.SessionSwitch -= _sessionSwitchHandler;
+            _sessionSwitchHandler = null;
+        }
+    }
+
+    private void HandleSessionSwitch(SessionSwitchEventArgs e)
+    {
+        switch (e.Reason)
+        {
+            case SessionSwitchReason.SessionLock:
+                // Pause if currently watching; ignore otherwise (already paused).
+                if (!_scheduler.IsPaused)
+                {
+                    _scheduler.Pause();
+                    _pausedByLock = true;
+                    PauseIcon.Visibility = Visibility.Collapsed;
+                    PlayIcon.Visibility = Visibility.Visible;
+                    _pulseStoryboard?.Stop();
+                    UpdateStatus();
+                    UpdateLookBar();
+                }
+                break;
+
+            case SessionSwitchReason.SessionUnlock:
+                // Resume only if we were the ones who paused (user pause wins).
+                if (_scheduler.IsPaused && _pausedByLock)
+                {
+                    _scheduler.Resume();
+                    _pausedByLock = false;
+                    PauseIcon.Visibility = Visibility.Visible;
+                    PlayIcon.Visibility = Visibility.Collapsed;
+                    _pulseStoryboard?.Begin();
+                    UpdateStatus();
+                    UpdateLookBar();
+                }
+                break;
+        }
     }
 
     public void ShowPanel()
@@ -146,7 +203,9 @@ public sealed partial class PeekPanelWindow : Window
     {
         if (_scheduler.IsPaused)
         {
-            StatusText.Text = "Paused · not watching";
+            StatusText.Text = _pausedByLock
+                ? "Paused · screen locked"
+                : "Paused · not watching";
             WatchDot.Visibility = Visibility.Collapsed;
             WatchDotHalo.Visibility = Visibility.Collapsed;
         }
@@ -329,6 +388,8 @@ public sealed partial class PeekPanelWindow : Window
 
     private void OnPauseClick(object sender, RoutedEventArgs e)
     {
+        // Manual toggle always overrides auto-pause state.
+        _pausedByLock = false;
         if (_scheduler.IsPaused)
         {
             _scheduler.Resume();
