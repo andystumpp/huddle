@@ -4,9 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text;
 using Anthropic;
 using Anthropic.Models.Messages;
 using Huddle.Capture;
+using Huddle.Models;
 
 namespace Huddle.Vision;
 
@@ -17,17 +19,27 @@ namespace Huddle.Vision;
 internal static class MomentExtractor
 {
     private const string SystemPrompt = """
-        You are Huddle's eye. You see one screenshot of the user's screen plus the name
-        of the app and window in the foreground. Write a single 1-2 sentence observation
-        about what the user is doing right now.
+        You are Huddle's eye. You see one screenshot of the user's current screen, the
+        foreground app and window title, and brief summaries of the user's recent moments
+        (prior captures, newest first).
+
+        In a single 1-2 sentence response, infer what the user is currently trying to
+        accomplish. Read the trail of recent moments for trajectory — what they've been
+        doing the last several minutes tells you more about purpose than the one frame
+        does.
 
         Voice:
         - Dry. Observant. Specific. Second-person.
-        - No greetings, no "I see", no "looks like".
-        - Anchor in concrete details from the screen — not generic statements.
-        - If nothing useful is happening, say so plainly in one sentence.
+        - Hedged when the trail doesn't pin it down ("you're likely...", "you seem to be...",
+          "it looks like you're trying to..."). Confident when the trajectory is unambiguous.
+        - Anchor in concrete details — name files, branches, tickets, specific UI states.
+        - No greetings. No "I see". No "looks like" as a tic.
+        - If nothing intentional seems to be happening (idle, browsing, between tasks), say
+          so plainly — a single hedged sentence is fine.
 
-        Do not propose what to do about it. Just describe what's happening.
+        Frame the response as intent ("you're trying to X" / "you're verifying X" / "you're
+        likely shipping X") rather than description ("you're looking at X"). Do not propose
+        what to do about it. Do not greet, summarize, or meta-comment.
         """;
 
     private static AnthropicClient? s_client;
@@ -35,12 +47,15 @@ internal static class MomentExtractor
     public static async Task<string> ExtractAsync(
         byte[] jpegBytes,
         ForegroundInfo foreground,
+        IReadOnlyList<Moment> recent,
         CancellationToken ct = default)
     {
         try
         {
             var client = GetOrCreateClient();
             string base64Image = Convert.ToBase64String(jpegBytes);
+
+            string contextText = BuildContextText(foreground, recent, DateTimeOffset.UtcNow);
 
             var parameters = new MessageCreateParams
             {
@@ -62,10 +77,7 @@ internal static class MomentExtractor
                                     MediaType = "image/jpeg",
                                 },
                             },
-                            new TextBlockParam
-                            {
-                                Text = $"Foreground app: {foreground.App}\nWindow title: {foreground.WindowTitle}",
-                            },
+                            new TextBlockParam { Text = contextText },
                         },
                     },
                 },
@@ -94,6 +106,78 @@ internal static class MomentExtractor
         {
             throw new VisionCallException($"{ex.GetType().Name}: {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// Build the user-message text block: optional "Recent moments" trail (up to 6,
+    /// newest first), then the current foreground line.
+    /// </summary>
+    private static string BuildContextText(
+        ForegroundInfo foreground,
+        IReadOnlyList<Moment> recent,
+        DateTimeOffset now)
+    {
+        var sb = new StringBuilder();
+        if (recent.Count > 0)
+        {
+            sb.AppendLine("Recent moments (newest first):");
+            int count = Math.Min(recent.Count, 6);
+            for (int i = 0; i < count; i++)
+            {
+                var m = recent[i];
+                sb.Append("- ")
+                  .Append(FormatRelativeTime(m.Ts, now))
+                  .Append(", ")
+                  .Append(m.App)
+                  .Append(" (\"")
+                  .Append(AbbreviateTitle(m.WindowTitle, 80))
+                  .Append("\"): ")
+                  .AppendLine(NormalizeWhitespace(m.Summary));
+            }
+            sb.AppendLine();
+        }
+        sb.Append("Foreground app: ").AppendLine(foreground.App);
+        sb.Append("Window title: ").Append(foreground.WindowTitle);
+        return sb.ToString();
+    }
+
+    private static string FormatRelativeTime(DateTimeOffset ts, DateTimeOffset now)
+    {
+        double minutes = (now - ts).TotalMinutes;
+        if (minutes < 1) return "just now";
+        if (minutes < 60) return $"{(int)minutes} min ago";
+        int hours = (int)(minutes / 60);
+        return $"{hours} h ago";
+    }
+
+    private static string AbbreviateTitle(string title, int max)
+    {
+        title = NormalizeWhitespace(title);
+        if (title.Length <= max) return title;
+        // Prefer breaking on a space near the limit.
+        int spaceBreak = title.LastIndexOf(' ', max);
+        if (spaceBreak > max / 2) return title.Substring(0, spaceBreak) + "…";
+        return title.Substring(0, max) + "…";
+    }
+
+    private static string NormalizeWhitespace(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        var sb = new StringBuilder(s.Length);
+        bool prevSpace = false;
+        foreach (char c in s)
+        {
+            if (c == '\r' || c == '\n' || c == '\t' || c == ' ')
+            {
+                if (!prevSpace) { sb.Append(' '); prevSpace = true; }
+            }
+            else
+            {
+                sb.Append(c);
+                prevSpace = false;
+            }
+        }
+        return sb.ToString().Trim();
     }
 
     private static AnthropicClient GetOrCreateClient()

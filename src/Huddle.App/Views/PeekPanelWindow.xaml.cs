@@ -200,13 +200,19 @@ public sealed partial class PeekPanelWindow : Window
 
     // --- capture orchestration ------------------------------------------
 
+    private const int TrailMoments = 6;
+
     private async void OnSchedulerTick(object? sender, EventArgs e)
     {
         try
         {
+            // Pull the trail BEFORE persisting the new moment so the model
+            // never sees its own about-to-be-written summary.
+            var recent = await MomentStore.RecentAsync(TrailMoments);
+
             var foreground = ForegroundContext.Read();
             byte[] jpeg = await ScreenCapture.CaptureAsJpegAsync();
-            string summary = await MomentExtractor.ExtractAsync(jpeg, foreground);
+            string summary = await MomentExtractor.ExtractAsync(jpeg, foreground, recent);
 
             var moment = new Moment(
                 UlidGenerator.Generate(),
