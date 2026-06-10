@@ -20,6 +20,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <controls:AppTile x:Name="SourceTile" Grid.Column="0" Size="22"/>
                 <TextBlock x:Name="WindowTitleText"
@@ -29,6 +30,13 @@
                            FontSize="11.5"
                            Foreground="#6BFFFFFF"
                            TextTrimming="CharacterEllipsis"
+                           TextWrapping="NoWrap"/>
+                <TextBlock x:Name="TimestampText"
+                           Grid.Column="2"
+                           Margin="9,0,0,0"
+                           VerticalAlignment="Center"
+                           FontSize="11.5"
+                           Foreground="#6BFFFFFF"
                            TextWrapping="NoWrap"/>
             </Grid>
         </StackPanel>

@@ -136,6 +136,10 @@ public sealed partial class PeekPanelWindow : Window
         _statusTimer.Tick += (_, _) => { UpdateStatus(); UpdateLookBar(); };
         _statusTimer.Start();
 
+        // Drive the once-a-minute clock that refreshes every card's relative
+        // timestamp ("3min ago") in place while the panel is alive.
+        Time.RelativeTime.Start();
+
         // Start the real capture tick (fires once immediately, then every 180 s).
         _scheduler.Tick += OnSchedulerTick;
         _scheduler.Start();
@@ -179,6 +183,7 @@ public sealed partial class PeekPanelWindow : Window
         _slideTimer?.Stop();
         _statusTimer?.Stop();
         _readTimer?.Stop();
+        Time.RelativeTime.Stop();
 
         _tab?.Close();
         _tab = null;

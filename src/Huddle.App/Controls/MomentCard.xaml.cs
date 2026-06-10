@@ -1,6 +1,8 @@
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Huddle.Models;
+using Huddle.Time;
 
 namespace Huddle.Controls;
 
@@ -21,6 +23,27 @@ public sealed partial class MomentCard : UserControl
     public MomentCard()
     {
         InitializeComponent();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        RelativeTime.Ticked += OnClockTick;
+        UpdateTimestamp();
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        RelativeTime.Ticked -= OnClockTick;
+    }
+
+    private void OnClockTick(object? sender, EventArgs e) => UpdateTimestamp();
+
+    private void UpdateTimestamp()
+    {
+        if (Moment is null) return;
+        TimestampText.Text = RelativeTime.Format(Moment.Ts, DateTimeOffset.Now);
     }
 
     private void Apply()
@@ -29,5 +52,6 @@ public sealed partial class MomentCard : UserControl
         SummaryText.Text = Moment.Summary;
         SourceTile.AppKey = Moment.App;
         WindowTitleText.Text = Moment.WindowTitle;
+        UpdateTimestamp();
     }
 }
