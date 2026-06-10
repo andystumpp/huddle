@@ -13,4 +13,7 @@ public sealed record Nudge(
     string Scenario,
     string Title,
     string Body,
-    IReadOnlyList<string> Sources);
+    IReadOnlyList<string> Sources)
+{
+    public bool IsStarred { get; set; }
+}

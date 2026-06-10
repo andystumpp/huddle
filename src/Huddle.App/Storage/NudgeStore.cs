@@ -14,8 +14,8 @@ internal static class NudgeStore
         using (var command = connection.CreateCommand())
         {
             command.CommandText = @"
-                INSERT INTO nudges (id, ts, scenario, title, body, sources)
-                VALUES ($id, $ts, $scenario, $title, $body, $sources);";
+                INSERT INTO nudges (id, ts, scenario, title, body, sources, is_starred)
+                VALUES ($id, $ts, $scenario, $title, $body, $sources, $starred);";
             command.Parameters.AddWithValue("$id", nudge.Id);
             command.Parameters.AddWithValue("$ts", nudge.Ts.ToUniversalTime().ToString("o"));
             command.Parameters.AddWithValue("$scenario", nudge.Scenario);
@@ -23,6 +23,7 @@ internal static class NudgeStore
             command.Parameters.AddWithValue("$body", nudge.Body);
             command.Parameters.AddWithValue("$sources",
                 nudge.Sources.Count == 0 ? (object)DBNull.Value : JsonSerializer.Serialize(nudge.Sources));
+            command.Parameters.AddWithValue("$starred", nudge.IsStarred ? 1 : 0);
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
@@ -33,13 +34,23 @@ internal static class NudgeStore
         }
     }
 
+    public static async Task SetStarredAsync(string id, bool starred)
+    {
+        await using var connection = await Database.OpenAsync().ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE nudges SET is_starred = $starred WHERE id = $id;";
+        command.Parameters.AddWithValue("$starred", starred ? 1 : 0);
+        command.Parameters.AddWithValue("$id", id);
+        await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+    }
+
     public static async Task<IReadOnlyList<Nudge>> RecentAsync(int limit)
     {
         var list = new List<Nudge>(limit);
         await using var connection = await Database.OpenAsync().ConfigureAwait(false);
         using var command = connection.CreateCommand();
         command.CommandText = @"
-            SELECT id, ts, scenario, title, body, sources
+            SELECT id, ts, scenario, title, body, sources, is_starred
               FROM nudges
              ORDER BY ts DESC
              LIMIT $limit;";
@@ -47,18 +58,7 @@ internal static class NudgeStore
         using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
         while (await reader.ReadAsync().ConfigureAwait(false))
         {
-            string? sourcesJson = reader.IsDBNull(5) ? null : reader.GetString(5);
-            IReadOnlyList<string> sources = sourcesJson is null
-                ? Array.Empty<string>()
-                : JsonSerializer.Deserialize<List<string>>(sourcesJson) ?? new List<string>();
-
-            list.Add(new Nudge(
-                Id: reader.GetString(0),
-                Ts: DateTimeOffset.Parse(reader.GetString(1), System.Globalization.CultureInfo.InvariantCulture),
-                Scenario: reader.GetString(2),
-                Title: reader.GetString(3),
-                Body: reader.GetString(4),
-                Sources: sources));
+            list.Add(Read(reader));
         }
         return list;
     }
@@ -69,7 +69,7 @@ internal static class NudgeStore
         await using var connection = await Database.OpenAsync().ConfigureAwait(false);
         using var command = connection.CreateCommand();
         command.CommandText = @"
-            SELECT id, ts, scenario, title, body, sources
+            SELECT id, ts, scenario, title, body, sources, is_starred
               FROM nudges
              WHERE scenario = $scenario
              ORDER BY ts DESC
@@ -79,18 +79,7 @@ internal static class NudgeStore
         using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
         while (await reader.ReadAsync().ConfigureAwait(false))
         {
-            string? sourcesJson = reader.IsDBNull(5) ? null : reader.GetString(5);
-            IReadOnlyList<string> sources = sourcesJson is null
-                ? Array.Empty<string>()
-                : JsonSerializer.Deserialize<List<string>>(sourcesJson) ?? new List<string>();
-
-            list.Add(new Nudge(
-                Id: reader.GetString(0),
-                Ts: DateTimeOffset.Parse(reader.GetString(1), System.Globalization.CultureInfo.InvariantCulture),
-                Scenario: reader.GetString(2),
-                Title: reader.GetString(3),
-                Body: reader.GetString(4),
-                Sources: sources));
+            list.Add(Read(reader));
         }
         return list;
     }
@@ -102,5 +91,24 @@ internal static class NudgeStore
         command.CommandText = "SELECT COUNT(*) FROM nudges;";
         var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
         return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static Nudge Read(Microsoft.Data.Sqlite.SqliteDataReader reader)
+    {
+        string? sourcesJson = reader.IsDBNull(5) ? null : reader.GetString(5);
+        IReadOnlyList<string> sources = sourcesJson is null
+            ? Array.Empty<string>()
+            : JsonSerializer.Deserialize<List<string>>(sourcesJson) ?? new List<string>();
+
+        return new Nudge(
+            Id: reader.GetString(0),
+            Ts: DateTimeOffset.Parse(reader.GetString(1), System.Globalization.CultureInfo.InvariantCulture),
+            Scenario: reader.GetString(2),
+            Title: reader.GetString(3),
+            Body: reader.GetString(4),
+            Sources: sources)
+        {
+            IsStarred = reader.GetInt32(6) != 0,
+        };
     }
 }

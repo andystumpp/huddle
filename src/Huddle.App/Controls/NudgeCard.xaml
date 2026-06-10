@@ -9,6 +9,47 @@
             BorderBrush="#12FFFFFF"
             BorderThickness="1"
             Padding="13">
+        <Border.Resources>
+            <SolidColorBrush x:Key="CardActionFg" Color="#A8FFFFFF"/>
+            <SolidColorBrush x:Key="CardActionHover" Color="#17FFFFFF"/>
+            <Style x:Key="CardActionButton" TargetType="Button">
+                <Setter Property="Width" Value="26"/>
+                <Setter Property="Height" Value="26"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Foreground" Value="{StaticResource CardActionFg}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Root"
+                                    Background="{TemplateBinding Background}"
+                                    CornerRadius="{TemplateBinding CornerRadius}">
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  Content="{TemplateBinding Content}"
+                                                  Foreground="{TemplateBinding Foreground}"/>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal"/>
+                                        <VisualState x:Name="PointerOver">
+                                            <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="Root" Storyboard.TargetProperty="Background">
+                                                    <DiscreteObjectKeyFrame KeyTime="0" Value="{StaticResource CardActionHover}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                            </Storyboard>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </Border.Resources>
         <StackPanel Spacing="9">
             <!-- Scenario tag: colored dot + uppercase letter-spaced name -->
             <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
@@ -31,14 +72,38 @@
                        FontWeight="SemiBold"
                        LineHeight="20"
                        Foreground="#F0FFFFFF"
-                       TextWrapping="Wrap"/>
+                       TextWrapping="Wrap"
+                       IsTextSelectionEnabled="True"/>
 
             <!-- Body — the substance -->
             <TextBlock x:Name="BodyText"
                        FontSize="12.5"
                        LineHeight="20"
                        Foreground="#C8FFFFFF"
-                       TextWrapping="Wrap"/>
+                       TextWrapping="Wrap"
+                       IsTextSelectionEnabled="True"/>
+
+            <!-- Footer: star + copy -->
+            <StackPanel Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right">
+                <Button x:Name="StarBtn"
+                        Style="{StaticResource CardActionButton}"
+                        Click="OnStarClick"
+                        ToolTipService.ToolTip="Star">
+                    <FontIcon x:Name="StarIcon"
+                              FontFamily="Segoe MDL2 Assets"
+                              FontSize="13"
+                              Glyph="&#xE1CE;"/>
+                </Button>
+                <Button x:Name="CopyBtn"
+                        Style="{StaticResource CardActionButton}"
+                        Click="OnCopyClick"
+                        ToolTipService.ToolTip="Copy">
+                    <FontIcon x:Name="CopyIcon"
+                              FontFamily="Segoe MDL2 Assets"
+                              FontSize="13"
+                              Glyph="&#xE8C8;"/>
+                </Button>
+            </StackPanel>
         </StackPanel>
     </Border>
 </UserControl>
