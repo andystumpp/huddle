@@ -8,6 +8,7 @@ using Windows.UI;
 using Huddle.Models;
 using Huddle.Scenarios;
 using Huddle.Storage;
+using Huddle.Time;
 
 namespace Huddle.Controls;
 
@@ -39,6 +40,27 @@ public sealed partial class NudgeCard : UserControl
     public NudgeCard()
     {
         InitializeComponent();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        RelativeTime.Ticked += OnClockTick;
+        UpdateTimestamp();
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        RelativeTime.Ticked -= OnClockTick;
+    }
+
+    private void OnClockTick(object? sender, EventArgs e) => UpdateTimestamp();
+
+    private void UpdateTimestamp()
+    {
+        if (Nudge is null) return;
+        TimestampText.Text = RelativeTime.Format(Nudge.Ts, DateTimeOffset.Now);
     }
 
     private void Apply()
@@ -46,6 +68,7 @@ public sealed partial class NudgeCard : UserControl
         if (Nudge is null) return;
         TitleText.Text = Nudge.Title;
         BodyText.Text = Nudge.Body;
+        UpdateTimestamp();
 
         var scenario = ScenarioRegistry.GetByKey(Nudge.Scenario);
         ScenarioTagText.Text = scenario?.DisplayName ?? Nudge.Scenario.ToUpperInvariant();

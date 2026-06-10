@@ -51,20 +51,33 @@
             </Style>
         </Border.Resources>
         <StackPanel Spacing="9">
-            <!-- Scenario tag: colored dot + uppercase letter-spaced name -->
-            <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-                <Ellipse x:Name="ScenarioDot"
-                         Width="7"
-                         Height="7"
-                         Fill="#C58BFF"
-                         VerticalAlignment="Center"/>
-                <TextBlock x:Name="ScenarioTagText"
+            <!-- Scenario tag: colored dot + uppercase letter-spaced name, timestamp at right -->
+            <Grid VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                    <Ellipse x:Name="ScenarioDot"
+                             Width="7"
+                             Height="7"
+                             Fill="#C58BFF"
+                             VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ScenarioTagText"
+                               FontSize="10.5"
+                               FontWeight="SemiBold"
+                               Foreground="#6BFFFFFF"
+                               CharacterSpacing="100"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock x:Name="TimestampText"
+                           Grid.Column="1"
+                           Margin="9,0,0,0"
                            FontSize="10.5"
-                           FontWeight="SemiBold"
                            Foreground="#6BFFFFFF"
-                           CharacterSpacing="100"
-                           VerticalAlignment="Center"/>
-            </StackPanel>
+                           VerticalAlignment="Center"
+                           TextWrapping="NoWrap"/>
+            </Grid>
 
             <!-- Title — the hook -->
             <TextBlock x:Name="TitleText"
