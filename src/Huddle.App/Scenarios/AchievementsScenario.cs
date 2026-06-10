@@ -77,7 +77,7 @@ internal sealed class AchievementsScenario : Scenario
 
         var parameters = new MessageCreateParams
         {
-            Model = Model.ClaudeSonnet4_6,
+            Model = ModelId,
             MaxTokens = 600,
             System = SystemPrompt,
             OutputConfig = new OutputConfig
@@ -105,7 +105,7 @@ internal sealed class AchievementsScenario : Scenario
             .Select(t => t.Text)
             .FirstOrDefault();
 
-        ScenarioDiagnostics.LogRun(Key, SystemPrompt, userText, text, response.Usage?.InputTokens, response.Usage?.OutputTokens);
+        ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, response.Usage?.InputTokens, response.Usage?.OutputTokens);
 
         if (string.IsNullOrWhiteSpace(text)) return new ScenarioResult(null, null);
 

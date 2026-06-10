@@ -23,6 +23,7 @@ internal sealed class LinkedInPostsScenario : Scenario
     public override TimeSpan Cadence => TimeSpan.FromHours(1);
     public override int TrailSize => 20;
     public override int PriorNudgesSize => 10;
+    public override Model ModelId => Model.ClaudeOpus4_8;
 
     private const string SystemPrompt = """
         You are Huddle's LinkedIn Posts scenario.
@@ -73,7 +74,7 @@ internal sealed class LinkedInPostsScenario : Scenario
 
         var parameters = new MessageCreateParams
         {
-            Model = Model.ClaudeSonnet4_6,
+            Model = ModelId,
             MaxTokens = 600,
             System = SystemPrompt,
             OutputConfig = new OutputConfig
@@ -101,7 +102,7 @@ internal sealed class LinkedInPostsScenario : Scenario
             .Select(t => t.Text)
             .FirstOrDefault();
 
-        ScenarioDiagnostics.LogRun(Key, SystemPrompt, userText, text, response.Usage?.InputTokens, response.Usage?.OutputTokens);
+        ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, response.Usage?.InputTokens, response.Usage?.OutputTokens);
 
         if (string.IsNullOrWhiteSpace(text)) return new ScenarioResult(null, null);
 
