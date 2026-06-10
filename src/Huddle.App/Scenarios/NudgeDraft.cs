@@ -5,7 +5,8 @@ namespace Huddle.Scenarios;
 
 /// <summary>
 /// Structured-output target for scenario Claude calls. The model returns either
-/// <c>{ "emit": false }</c> or the full nudge fields.
+/// <c>{ "emit": false, "reason": "..." }</c> or the full nudge fields with
+/// <c>emit: true</c>.
 /// </summary>
 internal sealed record NudgeDraft(
     [property: JsonPropertyName("emit")] bool Emit,

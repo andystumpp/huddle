@@ -12,55 +12,59 @@ using Huddle.Models;
 namespace Huddle.Scenarios;
 
 /// <summary>
-/// LinkedIn post drafts in a principal-architect voice from the recent moment trail.
+/// Surfaces concrete achievements (shipped / decided / resolved / learned / moved)
+/// from the user's recent work. Plain voice, dedup via prior emissions.
 /// </summary>
-internal sealed class LinkedInPostsScenario : Scenario
+internal sealed class AchievementsScenario : Scenario
 {
-    public override string Key => "linkedin-posts";
-    public override string Name => "LinkedIn posts";
-    public override string DisplayName => "LINKEDIN POSTS";
-    public override string AccentColorHex => "#C58BFF";
+    public override string Key => "achievements";
+    public override string Name => "Achievements";
+    public override string DisplayName => "ACHIEVEMENTS";
+    public override string AccentColorHex => "#54D2A6";
     public override TimeSpan Cadence => TimeSpan.FromHours(1);
-    public override int TrailSize => 20;
-    public override int PriorNudgesSize => 10;
+    public override int TrailSize => 60;
+    public override int PriorNudgesSize => 20;
 
     private const string SystemPrompt = """
-        You are Huddle's LinkedIn Posts scenario.
+        You are Huddle's Achievement Tracker scenario.
 
-        You see the user's last 20 moments — the trail of what they've been doing
-        in the past hour. The user is a principal-level software architect. Their
-        LinkedIn audience cares about thought leadership on AI-assisted
-        development: real challenges shipping with AI, what they've actually
-        learned, and how to build software in this era — not vibes, not hype.
+        You see the user's last 60 moments — a substantial chunk of their
+        workday. The user wants to log meaningful achievements at the end of
+        the day. Your job is to identify the concrete things they actually
+        shipped, decided, learned, or moved forward, and surface them one at
+        a time as they happen.
 
-        Your job: when the trail shows a genuinely post-worthy insight — a
-        specific challenge they navigated, a sharp opinion that fell out of
-        their work, a learned heuristic they've now applied — draft one
-        LinkedIn post idea. Otherwise stay silent.
+        What counts as an achievement (be flexible — small things count if
+        they moved the needle):
+        - Shipped: a PR merged, a feature deployed, a doc published
+        - Decided: a meaningful design call, a scope cut, a tradeoff chosen
+        - Resolved: a bug found and fixed, an outage handled, a blocker cleared
+        - Learned: a new pattern adopted, a previous belief updated, a gotcha
+          discovered
+        - Moved: a draft -> review, an idea -> spec, a question -> answer
 
-        A good post idea:
-        - Anchors in a specific concrete thing the user actually did. Not
-          generic "AI is changing dev". The moments show real work; the post
-          references that work.
-        - Reads in a principal architect's voice: opinionated, specific, shows
-          the seams. Never motivational. No emojis. No hashtags.
-        - Has a tweet-sized hook (~1 sentence) that earns the click, then 2-3
-          sentences of substance. Title field = hook. Body field = substance.
-        - Avoids "I just used AI to..." narcissism. Frames the insight, not
-          the user's brag.
-        - Doesn't repeat a post you've already proposed today (see the
-          "Previously posted today" block if present — those are off-limits).
+        When the trail shows a NEW achievement that you have NOT already
+        emitted (see the "Previously emitted today" block if present —
+        those are off-limits), draft a nudge:
+        - Title field: the achievement in one short line.
+        - Body field: 1-2 sentences of context — what specifically, what it
+          unblocks, what's next.
+        - Sources: the moment IDs that show the achievement.
 
-        If the trail shows only routine work — context switching, fixing a
-        typo, scrolling — return {"emit": false}. Silent beats a forced post.
+        Voice:
+        - Plain. Direct. Second-person.
+        - Anchor in concrete details from the moments — names, files,
+          numbers, PRs.
+        - Past tense for completed things ("You shipped X"). Present for
+          ongoing decisions ("You decided X").
+        - No emojis. No motivational language. No "great job!" framing.
+        - Confident commit when the trail is clear. Hedge when ambiguous.
 
-        When you stay silent, populate `reason` with a single sentence —
-        what specifically about the trail kept you from drafting? Be
-        concrete and short ("Trail was mostly idle screens", "Just PR
-        cleanup, no insight surfaced yet"). Skip pleasantries.
-
-        When you emit, sources should be the IDs of 1-3 moments that most
-        justify the post — the actual work that earned the idea.
+        If the trail shows nothing new — only routine context switching,
+        same work as before, no fresh achievement — return
+        {"emit": false} with a concrete one-sentence `reason` (e.g.
+        "Same PR review still in progress, nothing new shipped",
+        "Trail was mostly idle / locked screen").
         """;
 
     protected override async Task<ScenarioResult> ExecuteAsync(
@@ -131,11 +135,10 @@ internal sealed class LinkedInPostsScenario : Scenario
     private string BuildUserText(IReadOnlyList<Moment> trail, IReadOnlyList<Nudge> priorNudges, DateTimeOffset now)
     {
         var sb = new StringBuilder();
-        ScenarioPromptHelpers.AppendPriorNudges(sb, priorNudges, now, "Previously posted today");
+        ScenarioPromptHelpers.AppendPriorNudges(sb, priorNudges, now, "Previously emitted today");
         ScenarioPromptHelpers.AppendRecentMoments(sb, trail, now, TrailSize);
 
-        sb.Append("The user is a principal-level software architect; you saw the trail above. ");
-        sb.Append("Draft a LinkedIn post idea or stay silent per the system prompt. ");
+        sb.Append("Identify ONE new concrete achievement from the trail above, or stay silent per the system prompt. ");
         sb.Append("Sources should reference moment IDs from the trail (e.g. \"01KTQ...\").");
         return sb.ToString();
     }

@@ -63,6 +63,38 @@ internal static class NudgeStore
         return list;
     }
 
+    public static async Task<IReadOnlyList<Nudge>> RecentByScenarioAsync(string scenario, int limit)
+    {
+        var list = new List<Nudge>(limit);
+        await using var connection = await Database.OpenAsync().ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT id, ts, scenario, title, body, sources
+              FROM nudges
+             WHERE scenario = $scenario
+             ORDER BY ts DESC
+             LIMIT $limit;";
+        command.Parameters.AddWithValue("$scenario", scenario);
+        command.Parameters.AddWithValue("$limit", limit);
+        using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            string? sourcesJson = reader.IsDBNull(5) ? null : reader.GetString(5);
+            IReadOnlyList<string> sources = sourcesJson is null
+                ? Array.Empty<string>()
+                : JsonSerializer.Deserialize<List<string>>(sourcesJson) ?? new List<string>();
+
+            list.Add(new Nudge(
+                Id: reader.GetString(0),
+                Ts: DateTimeOffset.Parse(reader.GetString(1), System.Globalization.CultureInfo.InvariantCulture),
+                Scenario: reader.GetString(2),
+                Title: reader.GetString(3),
+                Body: reader.GetString(4),
+                Sources: sources));
+        }
+        return list;
+    }
+
     public static async Task<int> CountAsync()
     {
         await using var connection = await Database.OpenAsync().ConfigureAwait(false);

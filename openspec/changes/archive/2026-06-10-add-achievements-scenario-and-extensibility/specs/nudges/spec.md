@@ -1,21 +1,4 @@
-# nudges Specification
-
-## Purpose
-TBD - created by archiving change add-linkedin-scenario-and-nudges. Update Purpose after archive.
-## Requirements
-### Requirement: Nudge storage
-
-The app SHALL persist nudges in the existing local SQLite database at `%LOCALAPPDATA%\Huddle\huddle.db`. The `nudges` table SHALL include at minimum: `id` (TEXT primary key, ULID), `ts` (TEXT, ISO-8601 UTC timestamp of emission), `scenario` (TEXT, scenario key), `title` (TEXT), `body` (TEXT), and `sources` (TEXT, nullable, JSON array of moment IDs that justified the nudge). The table SHALL be backed by an index on `ts` descending. Every emitted nudge SHALL be inserted; storage is append-only at the API surface in this change (no dismiss / save / delete operations are exposed).
-
-#### Scenario: Database is migrated on first run after the change ships
-
-- **WHEN** the app launches with the existing `huddle.db` (which has only the `moments` table)
-- **THEN** migration `002_nudges.sql` is applied, the `nudges` table and `idx_nudges_ts` index exist, and the `__migrations` table records `002_nudges.sql` as applied
-
-#### Scenario: Successful nudge insert flushes to disk
-
-- **WHEN** a scenario emits a nudge and `NudgeStore.AddAsync` is called
-- **THEN** the row is inserted and the WAL is checkpointed before the call returns, so the nudge survives a subsequent force-kill
+## MODIFIED Requirements
 
 ### Requirement: Scenario runs on the moment-capture tick
 
@@ -46,19 +29,19 @@ After each successful moment capture, the system SHALL evaluate **each enabled s
 - **WHEN** a scenario's structured output is `{"emit": false, "reason": "..."}`
 - **THEN** no row is inserted into the `nudges` table; the reason is captured for diagnostic display
 
-### Requirement: LinkedIn Posts scenario
+### Requirement: Manual scenario trigger
 
-The system SHALL ship with one enabled scenario in this change, identified by the key `linkedin-posts`. It SHALL run no more often than once per hour (re-evaluated in-memory per app launch), it SHALL read the 20 most recent moments as its trail, and it SHALL use the model `claude-sonnet-4-6` with structured output following the schema in `design.md` D6. The system prompt SHALL match `design.md` D5 verbatim, framing the user as a principal-level software architect drafting AI-assisted-development thought leadership.
+The Nudges tab section header SHALL include a play-glyph button at its right edge that, when clicked, runs **every scenario in the registry immediately**, bypassing each scenario's cadence throttle. The button SHALL be disabled while the run is in flight. After completion, a short inline status SHALL summarize the aggregated outcome: `Run complete: N emitted, M silent` when at least one nudge was emitted, `Silent: <first scenario's reason>` when no nudges were emitted but a scenario produced a reason, or `Scenario stayed silent` as a fallback. Each scenario's `_lastRun` SHALL be updated by a manual run as if it were a scheduled run.
 
-#### Scenario: Scenario runs at startup once
+#### Scenario: Click runs every scenario without waiting for throttles
 
-- **WHEN** the app launches and the LinkedIn scenario has not yet run in this process
-- **THEN** the scenario is evaluated on the next successful moment tick
+- **WHEN** the user clicks the button (whether or not any scenario is due)
+- **THEN** every scenario in the registry is executed once; the button is disabled until all return
 
-#### Scenario: Scenario is throttled at one hour
+#### Scenario: Aggregate status reflects the outcome
 
-- **WHEN** the scenario has run within the last hour (in-memory `s_lastRun`)
-- **THEN** subsequent ticks do not run the scenario until 60 minutes have elapsed
+- **WHEN** the manual run completes with `e` scenarios emitting and `s` scenarios silent
+- **THEN** the status reads `Run complete: e emitted, s silent` (or one of the documented fallback variants when nothing emitted)
 
 ### Requirement: Nudge card
 
@@ -74,38 +57,7 @@ Each nudge SHALL be rendered as a `NudgeCard` containing, top to bottom: a scena
 - **WHEN** a nudge card renders with a `nudge.Scenario` that does not match any registered scenario
 - **THEN** the tag reads the upper-cased scenario key and the dot uses the default violet color
 
-### Requirement: Manual scenario trigger
-
-The Nudges tab section header SHALL include a play-glyph button at its right edge that, when clicked, runs **every scenario in the registry immediately**, bypassing each scenario's cadence throttle. The button SHALL be disabled while the run is in flight. After completion, a short inline status SHALL summarize the aggregated outcome: `Run complete: N emitted, M silent` when at least one nudge was emitted, `Silent: <first scenario's reason>` when no nudges were emitted but a scenario produced a reason, or `Scenario stayed silent` as a fallback. Each scenario's `_lastRun` SHALL be updated by a manual run as if it were a scheduled run.
-
-#### Scenario: Click runs every scenario without waiting for throttles
-
-- **WHEN** the user clicks the button (whether or not any scenario is due)
-- **THEN** every scenario in the registry is executed once; the button is disabled until all return
-
-#### Scenario: Aggregate status reflects the outcome
-
-- **WHEN** the manual run completes with `e` scenarios emitting and `s` scenarios silent
-- **THEN** the status reads `Run complete: e emitted, s silent` (or one of the documented fallback variants when nothing emitted)
-
-### Requirement: Nudges tab content
-
-When the Nudges tab is selected, the content area SHALL render the most recent 20 nudges from the store as a vertically scrollable list of `NudgeCard`s, newest-first. When the store contains zero nudges (and no nudge has been emitted in the current session), the existing empty state SHALL remain visible.
-
-#### Scenario: Empty state when no nudges exist
-
-- **WHEN** the Nudges tab is selected and `NudgeStore.CountAsync` returns 0
-- **THEN** the existing empty state (spark glyph + "No nudges right now." + watching subtitle) is visible
-
-#### Scenario: Cards render newest-first when nudges exist
-
-- **WHEN** the Nudges tab is selected and one or more nudges exist
-- **THEN** the empty state is hidden and the cards render in `ts DESC` order, capped at the 20 most recent
-
-#### Scenario: New nudge appears at the top in real time
-
-- **WHEN** a scenario emits a nudge while the panel is open
-- **THEN** the new card is inserted at position 0 of the visible list without restarting the app; if the empty state was visible, it is hidden
+## ADDED Requirements
 
 ### Requirement: Scenario abstraction
 
@@ -134,4 +86,3 @@ The system SHALL ship a built-in scenario with key `achievements`, running at ho
 
 - **WHEN** an Achievements nudge renders
 - **THEN** the card shows the tag `ACHIEVEMENTS` and a teal dot (`#54D2A6`)
-
