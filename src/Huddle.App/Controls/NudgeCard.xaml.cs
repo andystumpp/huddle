@@ -1,15 +1,28 @@
+using System;
+using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.UI;
 using Huddle.Models;
 using Huddle.Scenarios;
+using Huddle.Storage;
 
 namespace Huddle.Controls;
 
 public sealed partial class NudgeCard : UserControl
 {
+    private static readonly string StarOutlineGlyph = char.ConvertFromUtf32(0xE1CE);
+    private static readonly string StarFilledGlyph = char.ConvertFromUtf32(0xE1CF);
+    private static readonly string CopyGlyph = char.ConvertFromUtf32(0xE8C8);
+    private static readonly string CheckGlyph = char.ConvertFromUtf32(0xE73E);
+
     private static readonly Color s_fallbackDot = Color.FromArgb(0xFF, 0xC5, 0x8B, 0xFF);
+    private static readonly SolidColorBrush s_starOn =
+        new(Color.FromArgb(0xFF, 0xFF, 0xD4, 0x6B));
+    private static readonly SolidColorBrush s_actionFg =
+        new(Color.FromArgb(0xA8, 0xFF, 0xFF, 0xFF));
 
     public static readonly DependencyProperty NudgeProperty = DependencyProperty.Register(
         nameof(Nudge),
@@ -38,6 +51,46 @@ public sealed partial class NudgeCard : UserControl
         ScenarioTagText.Text = scenario?.DisplayName ?? Nudge.Scenario.ToUpperInvariant();
         ScenarioDot.Fill = new SolidColorBrush(
             scenario is null ? s_fallbackDot : ParseHex(scenario.AccentColorHex));
+
+        ApplyStarVisual(Nudge.IsStarred);
+    }
+
+    private void ApplyStarVisual(bool starred)
+    {
+        StarIcon.Glyph = starred ? StarFilledGlyph : StarOutlineGlyph;
+        StarIcon.Foreground = starred ? s_starOn : s_actionFg;
+    }
+
+    private async void OnStarClick(object sender, RoutedEventArgs e)
+    {
+        if (Nudge is null) return;
+        Nudge.IsStarred = !Nudge.IsStarred;
+        ApplyStarVisual(Nudge.IsStarred);
+        try
+        {
+            await NudgeStore.SetStarredAsync(Nudge.Id, Nudge.IsStarred);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Huddle] star toggle failed: {ex.Message}");
+        }
+    }
+
+    private void OnCopyClick(object sender, RoutedEventArgs e)
+    {
+        if (Nudge is null) return;
+        var pkg = new DataPackage();
+        pkg.SetText($"{Nudge.Title}\r\n\r\n{Nudge.Body}");
+        Clipboard.SetContent(pkg);
+
+        CopyIcon.Glyph = CheckGlyph;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            CopyIcon.Glyph = CopyGlyph;
+        };
+        timer.Start();
     }
 
     private static Color ParseHex(string hex)
