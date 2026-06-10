@@ -1,9 +1,10 @@
 using System;
 
-namespace Huddle.Vision;
+namespace Huddle.Models;
 
 /// <summary>
-/// A successful observation from a single capture. Matches the ADR 0001 moment schema.
+/// A scenario-neutral observation produced by one capture + Claude vision call.
+/// Schema matches ADR 0001's moment row.
 /// </summary>
 public sealed record Moment(
     string Id,

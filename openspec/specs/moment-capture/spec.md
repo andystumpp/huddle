@@ -3,20 +3,6 @@
 ## Purpose
 TBD - created by archiving change add-manual-capture-and-vision. Update Purpose after archive.
 ## Requirements
-### Requirement: Manual capture trigger
-
-The Activity tab SHALL display a small icon button (camera glyph, 28 × 28 px) at the right edge of the "PATTERNS DETECTED N" section header. Clicking the button SHALL initiate one capture + Claude vision call. While a call is in flight, the button SHALL be disabled and visually dimmed. The button is a temporary affordance; it SHALL be removed when the scheduled tick loop is introduced in a later capability.
-
-#### Scenario: Button is visible in the section header
-
-- **WHEN** the Activity tab is selected
-- **THEN** a camera-glyph icon button is visible at the right edge of the "PATTERNS DETECTED N" header row
-
-#### Scenario: In-flight calls disable the button
-
-- **WHEN** the user clicks the button and the capture + vision call is in progress
-- **THEN** the button is disabled and visually dimmed until the call completes (success or failure)
-
 ### Requirement: Primary display capture
 
 When the trigger fires, the system SHALL capture the contents of the primary display, resize the captured frame so the longest edge is at most 1280 px (preserving aspect ratio), and encode the result as a JPEG at approximately 80 % quality. The captured frame SHALL be held in memory only — it SHALL NOT be written to disk.
@@ -68,22 +54,46 @@ The system SHALL read the Anthropic API key from the `ANTHROPIC_API_KEY` environ
 - **WHEN** the user clicks the trigger and `ANTHROPIC_API_KEY` is unset
 - **THEN** no API call is attempted, the panel header shows "Set ANTHROPIC_API_KEY", and an error entry is appended to the moments log
 
-### Requirement: Moment schema and log sink
+### Requirement: Scheduled capture tick
 
-When the API call succeeds, the system SHALL construct a moment record matching ADR 0001's schema — `id` (ULID-style string), `ts` (ISO-8601 UTC), `app`, `window_title`, `summary` — and append it as a single JSON line to `%LOCALAPPDATA%\Huddle\moments.log`. The captured frame SHALL NOT be persisted anywhere.
+The capture pipeline SHALL be driven by a tick scheduler with a 180-second period. On app start, the scheduler SHALL fire one tick immediately, then continue at 180-second intervals. When the user pauses (via the existing pause button), the scheduler SHALL stop firing ticks; when the user resumes, the scheduler SHALL snap to a fresh 180-second countdown and resume firing.
 
-#### Scenario: Successful moment is appended to the log
+#### Scenario: Tick fires immediately on app start
 
-- **WHEN** a vision call completes with a summary text
-- **THEN** a single JSON line is appended to `%LOCALAPPDATA%\Huddle\moments.log` containing `id`, `ts`, `app`, `window_title`, and `summary`
+- **WHEN** `Huddle.exe` launches with a valid API key configured
+- **THEN** the capture pipeline (capture → Claude vision call → store) runs once within a few seconds of startup
 
-#### Scenario: Failures are also logged
+#### Scenario: Subsequent ticks fire every 180 seconds
 
-- **WHEN** the capture, the API call, or the response parsing fails
-- **THEN** a single JSON line is appended to the same log file with an `error` field describing the failure, alongside `ts`, `app`, and `window_title` when available
+- **WHEN** the scheduler is in the watching state
+- **THEN** the capture pipeline fires 180 seconds after the previous tick completed its countdown
+
+#### Scenario: Pause stops the tick
+
+- **WHEN** the user clicks the pause button while watching
+- **THEN** no further ticks fire until the user resumes; any in-flight capture is allowed to complete
+
+#### Scenario: Resume restarts at a fresh 180 seconds
+
+- **WHEN** the user clicks the play button while paused
+- **THEN** the look-bar resets to 0 and the scheduler counts down a full 180 seconds before the next tick fires
+
+### Requirement: SQLite moment store
+
+The app SHALL persist moments in a local SQLite database at `%LOCALAPPDATA%\Huddle\huddle.db`. The store SHALL contain a single table `moments` with columns matching ADR 0001's schema — `id` (TEXT PRIMARY KEY), `ts` (TEXT, ISO-8601 UTC), `app` (TEXT), `window_title` (TEXT), `summary` (TEXT) — plus an index `idx_moments_ts` on `ts` descending. Each successful capture SHALL append one row. The captured frame SHALL NOT be persisted.
+
+#### Scenario: Database is created on first run
+
+- **WHEN** the app launches and `huddle.db` does not exist
+- **THEN** the file is created, the `moments` table and `idx_moments_ts` index are present, and the schema matches the ADR 0001 columns
+
+#### Scenario: A successful capture inserts a row
+
+- **WHEN** a tick completes the capture + Claude vision call successfully
+- **THEN** a single new row is inserted into `moments` with the new ULID, the UTC timestamp, the foreground app, the window title, and the summary text
 
 #### Scenario: Frame is not persisted
 
-- **WHEN** the capture pipeline runs end-to-end
-- **THEN** the JPEG bytes are not written to any file on disk
+- **WHEN** any tick runs end-to-end (success or failure)
+- **THEN** the captured JPEG bytes are not written to any file on disk
 

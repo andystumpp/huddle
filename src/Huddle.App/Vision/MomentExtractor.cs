@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -97,12 +98,80 @@ internal static class MomentExtractor
 
     private static AnthropicClient GetOrCreateClient()
     {
-        if (s_client is null)
+        if (s_client is not null) return s_client;
+
+        var key = ResolveApiKey();
+        if (string.IsNullOrWhiteSpace(key))
         {
-            // SDK reads ANTHROPIC_API_KEY from the environment.
-            s_client = new AnthropicClient();
+            throw new VisionCallException("ANTHROPIC_API_KEY not configured");
         }
+        // Promote into process env so the SDK's automatic lookup finds it.
+        Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", key);
+        s_client = new AnthropicClient();
         return s_client;
+    }
+
+    /// <summary>
+    /// Resolves the API key from (in order): process env, User registry env target,
+    /// `huddle.env` next to the exe, `huddle.env` at %LOCALAPPDATA%\Huddle\.
+    /// </summary>
+    private static string? ResolveApiKey()
+    {
+        var key = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+        if (!string.IsNullOrWhiteSpace(key)) return key;
+
+        try
+        {
+            key = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY", EnvironmentVariableTarget.User);
+            if (!string.IsNullOrWhiteSpace(key)) return key;
+        }
+        catch { /* registry can throw in restricted contexts */ }
+
+        foreach (var path in EnvFileCandidates())
+        {
+            key = ReadKeyFromEnvFile(path, "ANTHROPIC_API_KEY");
+            if (!string.IsNullOrWhiteSpace(key)) return key;
+        }
+        return null;
+    }
+
+    private static IEnumerable<string> EnvFileCandidates()
+    {
+        var exeDir = AppContext.BaseDirectory;
+        if (!string.IsNullOrWhiteSpace(exeDir))
+        {
+            yield return Path.Combine(exeDir, "huddle.env");
+        }
+        var localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrWhiteSpace(localApp))
+        {
+            yield return Path.Combine(localApp, "Huddle", "huddle.env");
+        }
+    }
+
+    private static string? ReadKeyFromEnvFile(string path, string name)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            foreach (var rawLine in File.ReadAllLines(path))
+            {
+                var line = rawLine.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                int eq = line.IndexOf('=');
+                if (eq <= 0) continue;
+                var k = line.Substring(0, eq).Trim();
+                if (!string.Equals(k, name, StringComparison.OrdinalIgnoreCase)) continue;
+                var v = line.Substring(eq + 1).Trim();
+                if (v.Length >= 2 && ((v[0] == '"' && v[^1] == '"') || (v[0] == '\'' && v[^1] == '\'')))
+                {
+                    v = v.Substring(1, v.Length - 2);
+                }
+                return v;
+            }
+        }
+        catch { /* unreadable env file — ignore */ }
+        return null;
     }
 }
 

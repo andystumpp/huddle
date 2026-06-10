@@ -68,12 +68,12 @@ The peek panel SHALL use a DesktopAcrylic system backdrop (or, on systems where 
 
 ### Requirement: Look-bar progress hairline
 
-The peek panel SHALL display a 2 px progress hairline at its top edge that fills horizontally as the next-look countdown advances. When the countdown reaches zero, the hairline SHALL reset to empty and begin filling again. When the app is paused, the hairline SHALL be empty and stationary.
+The peek panel SHALL display a 2 px progress hairline at its top edge that fills horizontally as the next-look countdown advances. The countdown period SHALL be 180 seconds (3 minutes), matching the capture tick. When the countdown reaches zero, the hairline SHALL reset to empty and begin filling again. When the app is paused, the hairline SHALL be empty and stationary.
 
-#### Scenario: Hairline fills over the tick
+#### Scenario: Hairline fills over the 3-minute tick
 
-- **WHEN** the watching countdown advances from start to finish
-- **THEN** the look-bar's filled width goes from 0% to 100%
+- **WHEN** the watching countdown advances from 180 s to 0
+- **THEN** the look-bar's filled width goes from 0% to 100% over that span
 
 #### Scenario: Pause clears the hairline
 
@@ -147,30 +147,41 @@ The peek panel SHALL display a two-tab strip directly below the panel header, re
 - **WHEN** the panel loads with N patterns and 0 nudges
 - **THEN** the Activity tab shows the count "N" and the Nudges tab shows "0"
 
-### Requirement: Activity tab content — patterns detected
+### Requirement: Activity tab content — observations
 
-When the Activity tab is selected, the content area SHALL display a section header reading **"PATTERNS DETECTED N"** in uppercase with a small circled-plus glyph to its left, where N is the number of patterns currently shown. Below the header, the panel SHALL render a vertically scrollable list of pattern cards in the order provided by the pattern source.
+When the Activity tab is selected, the content area SHALL display a section header reading **"OBSERVATIONS N"** in uppercase with a small circled-plus glyph to its left, where N is the number of moments currently rendered. Below the header, the panel SHALL render a vertically scrollable list of moment cards, ordered newest-first. The rendered list SHALL be capped at the 20 most recent moments; older moments stay in the store but are not displayed in this change.
 
 #### Scenario: Section header shows the count
 
-- **WHEN** the Activity tab is selected and 4 patterns are loaded
-- **THEN** the section header reads "PATTERNS DETECTED 4" (uppercase) with a circled-plus glyph to its left
+- **WHEN** the Activity tab is selected and N moments are loaded
+- **THEN** the section header reads "OBSERVATIONS N" (uppercase) with a circled-plus glyph to its left
 
-### Requirement: Pattern card content
+#### Scenario: Moments listed newest first
 
-Each pattern card SHALL show a bold one-line title, a one- or two-line description sentence, and a row of source-app monogram tiles (one per app in `sourceApps`). Patterns are scenario-neutral observations — scenario framing belongs on the nudge card, not the pattern card.
+- **WHEN** the panel has loaded multiple moments
+- **THEN** they render top-to-bottom from largest `ts` to smallest
 
-#### Scenario: Card shows title, description, and sources
+#### Scenario: New moments appear at the top in real time
 
-- **WHEN** a pattern card renders
-- **THEN** all three elements are visible: title, description, and source-app tile(s)
+- **WHEN** the tick completes a successful capture while the panel is open
+- **THEN** the new moment is inserted at position 0 of the visible list without restarting the app
 
-### Requirement: Seeded pattern data
+#### Scenario: Older moments fall off the visible list
 
-The panel SHALL be backed by a static, in-memory seed of four patterns loaded on startup, with no persistence in this change. The seed SHALL include at least: a "Heavy context-switching" pattern (sources VS Code + Chrome), a "Wrestling one sentence" pattern (source Code.exe), a "Repeating yourself" pattern (sources Code.exe + Slack), and one additional pattern for visual completeness below the fold.
+- **WHEN** the panel already shows 20 moments and a new one arrives
+- **THEN** the new moment is shown at the top and the oldest is removed from the visible list (it remains in the store)
 
-#### Scenario: Four seed patterns load on startup
+### Requirement: Moment card content
 
-- **WHEN** the panel launches
-- **THEN** exactly four pattern cards are rendered on the Activity tab, matching the seeded patterns
+Each moment card SHALL show the model's 1–2 sentence summary text as the main content, followed by a single footer row containing the source app's monogram tile (via `AppTile`) and the foreground window title. The window title SHALL trim with character-ellipsis if it doesn't fit on a single line. Moments are scenario-neutral observations — no scenario tag, no scenario rail, no nudge badge.
+
+#### Scenario: Card shows summary, source tile, and title
+
+- **WHEN** a moment card renders
+- **THEN** the summary text is visible as the main body, and the footer shows one `AppTile` plus the window title
+
+#### Scenario: Window title is trimmed when too long
+
+- **WHEN** a moment's window title exceeds the card width on a single line
+- **THEN** the title is trimmed with a trailing ellipsis (no wrapping to a second line)
 
