@@ -307,19 +307,24 @@ public sealed partial class PeekPanelWindow : Window
 
     private async Task RunScenariosAsync()
     {
-        if (!LinkedInPostsScenario.IsDue(DateTimeOffset.UtcNow)) return;
-
-        var trail = await MomentStore.RecentAsync(LinkedInPostsScenario.TrailSize);
-        var result = await LinkedInPostsScenario.RunAsync(trail);
-        if (result.Nudge is null) return;
-
-        await NudgeStore.AddAsync(result.Nudge);
-        _nudges.Insert(0, result.Nudge);
-        while (_nudges.Count > MaxVisibleNudges)
+        var now = DateTimeOffset.UtcNow;
+        foreach (var scenario in ScenarioRegistry.All)
         {
-            _nudges.RemoveAt(_nudges.Count - 1);
+            if (!scenario.IsDue(now)) continue;
+
+            var trail = await MomentStore.RecentAsync(scenario.TrailSize);
+            var priorNudges = await NudgeStore.RecentByScenarioAsync(scenario.Key, scenario.PriorNudgesSize);
+            var result = await scenario.RunAsync(trail, priorNudges);
+            if (result.Nudge is null) continue;
+
+            await NudgeStore.AddAsync(result.Nudge);
+            _nudges.Insert(0, result.Nudge);
+            while (_nudges.Count > MaxVisibleNudges)
+            {
+                _nudges.RemoveAt(_nudges.Count - 1);
+            }
+            UpdateNudgesSurface();
         }
-        UpdateNudgesSurface();
     }
 
     private void UpdateNudgesSurface()
@@ -339,26 +344,50 @@ public sealed partial class PeekPanelWindow : Window
 
         try
         {
-            var trail = await MomentStore.RecentAsync(LinkedInPostsScenario.TrailSize);
-            var result = await LinkedInPostsScenario.RunAsync(trail);
+            int emitted = 0;
+            int silent = 0;
+            string? firstReason = null;
 
-            if (result.Nudge is null)
+            foreach (var scenario in ScenarioRegistry.All)
             {
-                string reason = string.IsNullOrWhiteSpace(result.SilentReason)
-                    ? "Scenario stayed silent"
-                    : $"Silent: {result.SilentReason}";
-                ShowRunNowStatus(reason);
-                return;
+                var trail = await MomentStore.RecentAsync(scenario.TrailSize);
+                var priorNudges = await NudgeStore.RecentByScenarioAsync(scenario.Key, scenario.PriorNudgesSize);
+                var result = await scenario.RunAsync(trail, priorNudges);
+
+                if (result.Nudge is not null)
+                {
+                    await NudgeStore.AddAsync(result.Nudge);
+                    _nudges.Insert(0, result.Nudge);
+                    while (_nudges.Count > MaxVisibleNudges)
+                    {
+                        _nudges.RemoveAt(_nudges.Count - 1);
+                    }
+                    emitted++;
+                }
+                else
+                {
+                    silent++;
+                    if (firstReason is null && !string.IsNullOrWhiteSpace(result.SilentReason))
+                    {
+                        firstReason = result.SilentReason;
+                    }
+                }
             }
 
-            await NudgeStore.AddAsync(result.Nudge);
-            _nudges.Insert(0, result.Nudge);
-            while (_nudges.Count > MaxVisibleNudges)
-            {
-                _nudges.RemoveAt(_nudges.Count - 1);
-            }
             UpdateNudgesSurface();
-            ShowRunNowStatus("Nudge emitted");
+
+            if (emitted > 0)
+            {
+                ShowRunNowStatus($"Run complete: {emitted} emitted, {silent} silent");
+            }
+            else if (firstReason is not null)
+            {
+                ShowRunNowStatus($"Silent: {firstReason}");
+            }
+            else
+            {
+                ShowRunNowStatus("Scenario stayed silent");
+            }
         }
         catch (Exception ex)
         {
