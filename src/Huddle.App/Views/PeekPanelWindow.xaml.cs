@@ -14,6 +14,7 @@ using Windows.Graphics;
 using WinRT.Interop;
 using Huddle.Capture;
 using Huddle.Models;
+using Huddle.Scenarios;
 using Huddle.Storage;
 using Huddle.Vision;
 
@@ -27,11 +28,13 @@ public sealed partial class PeekPanelWindow : Window
     private const int HeightHeadroom = 84;
     private const int DesiredHeight = 460;
     private const int MaxVisibleMoments = 20;
+    private const int MaxVisibleNudges = 20;
 
     private readonly IntPtr _hwnd;
     private readonly AppWindow _appWindow;
     private readonly TickScheduler _scheduler = new();
     private readonly ObservableCollection<Moment> _moments = new();
+    private readonly ObservableCollection<Nudge> _nudges = new();
 
     private Storyboard? _pulseStoryboard;
     private DispatcherTimer? _statusTimer;
@@ -68,15 +71,20 @@ public sealed partial class PeekPanelWindow : Window
         UpdateTabSurface();
         CountNudges.Text = "0";
 
-        // Bind the Activity tab to the live moments collection.
+        // Bind the Activity / Nudges tabs to their live collections.
         MomentsRepeater.ItemsSource = _moments;
+        NudgesRepeater.ItemsSource = _nudges;
 
         try
         {
             await Database.InitializeAsync();
-            var recent = await MomentStore.RecentAsync(MaxVisibleMoments);
-            foreach (var m in recent) _moments.Add(m);
+            var recentMoments = await MomentStore.RecentAsync(MaxVisibleMoments);
+            foreach (var m in recentMoments) _moments.Add(m);
             UpdateObservationCount();
+
+            var recentNudges = await NudgeStore.RecentAsync(MaxVisibleNudges);
+            foreach (var n in recentNudges) _nudges.Add(n);
+            UpdateNudgesSurface();
         }
         catch (Exception ex)
         {
@@ -229,11 +237,86 @@ public sealed partial class PeekPanelWindow : Window
                 _moments.RemoveAt(_moments.Count - 1);
             }
             UpdateObservationCount();
+
+            await RunScenariosAsync();
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[Huddle] tick failed: {ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    private async Task RunScenariosAsync()
+    {
+        if (!LinkedInPostsScenario.IsDue(DateTimeOffset.UtcNow)) return;
+
+        var trail = await MomentStore.RecentAsync(LinkedInPostsScenario.TrailSize);
+        var result = await LinkedInPostsScenario.RunAsync(trail);
+        if (result.Nudge is null) return;
+
+        await NudgeStore.AddAsync(result.Nudge);
+        _nudges.Insert(0, result.Nudge);
+        while (_nudges.Count > MaxVisibleNudges)
+        {
+            _nudges.RemoveAt(_nudges.Count - 1);
+        }
+        UpdateNudgesSurface();
+    }
+
+    private void UpdateNudgesSurface()
+    {
+        bool any = _nudges.Count > 0;
+        NudgesEmptyState.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
+        NudgesScroll.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        CountNudges.Text = _nudges.Count.ToString();
+        NudgeCountText.Text = _nudges.Count.ToString();
+    }
+
+    private async void OnRunScenariosNowClick(object sender, RoutedEventArgs e)
+    {
+        RunNowBtn.IsEnabled = false;
+        RunNowBtn.Opacity = 0.4;
+        ShowRunNowStatus("Running…");
+
+        try
+        {
+            var trail = await MomentStore.RecentAsync(LinkedInPostsScenario.TrailSize);
+            var result = await LinkedInPostsScenario.RunAsync(trail);
+
+            if (result.Nudge is null)
+            {
+                string reason = string.IsNullOrWhiteSpace(result.SilentReason)
+                    ? "Scenario stayed silent"
+                    : $"Silent: {result.SilentReason}";
+                ShowRunNowStatus(reason);
+                return;
+            }
+
+            await NudgeStore.AddAsync(result.Nudge);
+            _nudges.Insert(0, result.Nudge);
+            while (_nudges.Count > MaxVisibleNudges)
+            {
+                _nudges.RemoveAt(_nudges.Count - 1);
+            }
+            UpdateNudgesSurface();
+            ShowRunNowStatus("Nudge emitted");
+        }
+        catch (Exception ex)
+        {
+            ShowRunNowStatus($"Error: {ex.Message}");
+            Debug.WriteLine($"[Huddle] RunNow failed: {ex}");
+        }
+        finally
+        {
+            RunNowBtn.IsEnabled = true;
+            RunNowBtn.Opacity = 1.0;
+        }
+    }
+
+    private void ShowRunNowStatus(string text)
+    {
+        RunNowStatusText.Text = text;
+        RunNowStatusText.Visibility = Visibility.Visible;
     }
 
     private void UpdateObservationCount()
