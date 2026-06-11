@@ -10,7 +10,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using Microsoft.Win32;
 using Windows.Graphics;
 using WinRT.Interop;
 using Huddle.Capture;
@@ -49,7 +48,7 @@ public sealed partial class PeekPanelWindow : Window
     private Storyboard? _pulseStoryboard;
     private DispatcherTimer? _statusTimer;
     private bool _pausedByLock;
-    private SessionSwitchEventHandler? _sessionSwitchHandler;
+    private SessionLockWatcher? _lockWatcher;
 
     // Cached panel geometry (set by PositionPanel).
     private int _panelY;
@@ -131,9 +130,19 @@ public sealed partial class PeekPanelWindow : Window
             Debug.WriteLine($"[Huddle] store init / load failed: {ex}");
         }
 
-        // Drive the status-line countdown every second.
+        // Drive the status-line countdown every second. While lock-paused,
+        // also verify the real lock state so a missed unlock message
+        // self-heals instead of leaving the panel paused forever.
         _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _statusTimer.Tick += (_, _) => { UpdateStatus(); UpdateLookBar(); };
+        _statusTimer.Tick += (_, _) =>
+        {
+            if (_pausedByLock && !SessionLockWatcher.IsSessionLocked())
+            {
+                ResumeFromLock();
+            }
+            UpdateStatus();
+            UpdateLookBar();
+        };
         _statusTimer.Start();
 
         // Drive the once-a-minute clock that refreshes every card's relative
@@ -145,13 +154,11 @@ public sealed partial class PeekPanelWindow : Window
         _scheduler.Start();
 
         // Listen for workstation lock / unlock so we can auto-pause and
-        // auto-resume. SystemEvents fires on a background thread; marshal back
-        // to the UI thread before touching scheduler/UI state.
-        _sessionSwitchHandler = (_, args) =>
-        {
-            DispatcherQueue.TryEnqueue(() => HandleSessionSwitch(args));
-        };
-        SystemEvents.SessionSwitch += _sessionSwitchHandler;
+        // auto-resume. WTS messages arrive on this window's own thread, so the
+        // handlers touch scheduler/UI state directly.
+        _lockWatcher = new SessionLockWatcher(_hwnd);
+        _lockWatcher.Locked += (_, _) => PauseForLock();
+        _lockWatcher.Unlocked += (_, _) => ResumeFromLock();
 
         // Spin up the peek-tab window (the count badge that lives at the right
         // edge whenever the panel is hidden). Created here so PositionPanel has
@@ -173,11 +180,8 @@ public sealed partial class PeekPanelWindow : Window
 
     private void OnWindowClosed(object sender, WindowEventArgs e)
     {
-        if (_sessionSwitchHandler is not null)
-        {
-            SystemEvents.SessionSwitch -= _sessionSwitchHandler;
-            _sessionSwitchHandler = null;
-        }
+        _lockWatcher?.Dispose();
+        _lockWatcher = null;
 
         _hoverTimer?.Stop();
         _slideTimer?.Stop();
@@ -189,38 +193,33 @@ public sealed partial class PeekPanelWindow : Window
         _tab = null;
     }
 
-    private void HandleSessionSwitch(SessionSwitchEventArgs e)
+    private void PauseForLock()
     {
-        switch (e.Reason)
-        {
-            case SessionSwitchReason.SessionLock:
-                // Pause if currently watching; ignore otherwise (already paused).
-                if (!_scheduler.IsPaused)
-                {
-                    _scheduler.Pause();
-                    _pausedByLock = true;
-                    PauseIcon.Visibility = Visibility.Collapsed;
-                    PlayIcon.Visibility = Visibility.Visible;
-                    _pulseStoryboard?.Stop();
-                    UpdateStatus();
-                    UpdateLookBar();
-                }
-                break;
+        // Pause if currently watching; ignore otherwise (already paused —
+        // a lock never overrides the user's own pause).
+        if (_scheduler.IsPaused) return;
 
-            case SessionSwitchReason.SessionUnlock:
-                // Resume only if we were the ones who paused (user pause wins).
-                if (_scheduler.IsPaused && _pausedByLock)
-                {
-                    _scheduler.Resume();
-                    _pausedByLock = false;
-                    PauseIcon.Visibility = Visibility.Visible;
-                    PlayIcon.Visibility = Visibility.Collapsed;
-                    _pulseStoryboard?.Begin();
-                    UpdateStatus();
-                    UpdateLookBar();
-                }
-                break;
-        }
+        _scheduler.Pause();
+        _pausedByLock = true;
+        PauseIcon.Visibility = Visibility.Collapsed;
+        PlayIcon.Visibility = Visibility.Visible;
+        _pulseStoryboard?.Stop();
+        UpdateStatus();
+        UpdateLookBar();
+    }
+
+    private void ResumeFromLock()
+    {
+        // Resume only if we were the ones who paused (user pause wins).
+        if (!_scheduler.IsPaused || !_pausedByLock) return;
+
+        _scheduler.Resume();
+        _pausedByLock = false;
+        PauseIcon.Visibility = Visibility.Visible;
+        PlayIcon.Visibility = Visibility.Collapsed;
+        _pulseStoryboard?.Begin();
+        UpdateStatus();
+        UpdateLookBar();
     }
 
     public void ShowPanel()
@@ -341,6 +340,15 @@ public sealed partial class PeekPanelWindow : Window
 
     private async void OnSchedulerTick(object? sender, EventArgs e)
     {
+        // Level-triggered guard: the WM_WTSSESSION_CHANGE lock message can be
+        // missed, so verify the real state before every capture. A missed
+        // lock then costs one skipped tick, not a night of lock-screen calls.
+        if (SessionLockWatcher.IsSessionLocked())
+        {
+            PauseForLock();
+            return;
+        }
+
         try
         {
             // Pull the trail BEFORE persisting the new moment so the model
