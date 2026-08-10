@@ -26,6 +26,13 @@ internal abstract class Scenario
     /// <summary>The Claude model used for this scenario's call. Sonnet by default.</summary>
     public virtual Model ModelId => Model.ClaudeSonnet4_6;
 
+    /// <summary>
+    /// The Claude backend for this scenario's call — API (metered) or CLI
+    /// (subscription), resolved once from config. Subclasses call
+    /// <c>Backend.CompleteAsync(...)</c> rather than the SDK directly.
+    /// </summary>
+    protected IScenarioBackend Backend { get; } = ScenarioBackendFactory.Resolve();
+
     private DateTimeOffset _lastRun = DateTimeOffset.MinValue;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
