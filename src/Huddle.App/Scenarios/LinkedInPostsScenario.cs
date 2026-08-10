@@ -52,16 +52,21 @@ internal sealed class LinkedInPostsScenario : Scenario
           AI that holds across stacks. "When the symptom is geometric and the
           framework insists everything's fine, drop a layer to read ground
           truth." That's the post.
-        - The ANCHOR: one or two lines of specific detail proving the user
-          actually lived it, so it reads as earned experience and not a LinkedIn
-          platitude. Keep it brief. Strip jargon a general senior-engineer
-          audience wouldn't share — specific API names, line counts, framework
-          versions, project nouns. Mention the technology only when it's load-
-          bearing to the lesson, and even then in one phrase, not a tour.
+        - The ANCHOR: at most one or two lines proving the user actually lived
+          it, so it reads as earned experience and not a LinkedIn platitude.
+          Keep it brief AND abstract: describe the SHAPE of the situation
+          ("three genuinely divergent directions for the same feature"), never
+          the project-specific specifics of what each one was. A reader in a
+          different domain entirely (different stack, different kind of software)
+          must be able to map it onto their own work. Strip project nouns, API
+          names, line counts, framework versions. If the reader needs to know
+          what you were building to follow the point, the anchor is too
+          specific: generalize it or stay silent.
 
-        Litmus test before you emit: could a backend engineer who has never
-        opened this project repost this lesson to their own team and have it
-        land? If no, it's too specific — generalize or stay silent.
+        Litmus test before you emit: could an engineer in a completely
+        different domain (different stack, different kind of software) repost
+        this lesson to their team and have it land? If it only makes sense to
+        someone who knows this project, generalize the anchor or stay silent.
 
         A good post idea:
         - Leads with the transferable pattern; uses the specific work as a short
@@ -69,7 +74,9 @@ internal sealed class LinkedInPostsScenario : Scenario
           anecdote-light.
         - Reads in a partner-level architect's voice: opinionated, earned,
           shows the seams of real judgment. Never motivational, never a brag.
-          No emojis. No hashtags.
+          No emojis. No hashtags. No em dashes or en dashes; they read as
+          AI-written text, so use commas, periods, parentheses, or a colon
+          instead. Write like a person, not a model.
         - Has a tweet-sized hook (~1 sentence) that names the general tension or
           claim, then a developed body — a short paragraph or two, roughly
           120-220 words — that earns the hook: state the pattern, ground it in
@@ -101,48 +108,25 @@ internal sealed class LinkedInPostsScenario : Scenario
         IReadOnlyList<Nudge> priorNudges,
         CancellationToken ct)
     {
-        var client = new AnthropicClient();
         string userText = BuildUserText(trail, priorNudges, DateTimeOffset.UtcNow);
 
-        var parameters = new MessageCreateParams
-        {
-            Model = ModelId,
+        var request = new ScenarioRequest(
+            Model: ModelId,
             // Thinking blocks share this budget, so leave generous headroom
             // above the ~220-word post body.
-            MaxTokens = 4000,
-            System = SystemPrompt,
-            // High reasoning for the LinkedIn scenario: adaptive thinking (off
-            // by default on Opus 4.8 when omitted) at high effort. Lifting a
-            // specific moment into a transferable pattern is the kind of
-            // judgment that benefits from the model actually thinking first.
-            Thinking = new ThinkingConfigAdaptive(),
-            OutputConfig = new OutputConfig
-            {
-                Effort = Effort.High,
-                Format = new JsonOutputFormat { Schema = ScenarioPromptHelpers.BuildNudgeDraftSchema() },
-            },
-            Messages = new List<MessageParam>
-            {
-                new()
-                {
-                    Role = Role.User,
-                    Content = new List<ContentBlockParam>
-                    {
-                        new TextBlockParam { Text = userText },
-                    },
-                },
-            },
-        };
+            MaxTokens: 4000,
+            SystemPrompt: SystemPrompt,
+            UserText: userText,
+            JsonSchema: ScenarioPromptHelpers.BuildNudgeDraftSchema(),
+            // High reasoning: lifting a specific moment into a transferable
+            // pattern benefits from the model thinking first. On the API backend
+            // this applies high effort + adaptive thinking; on the CLI, --effort high.
+            Effort: Effort.High);
 
-        Message response = await client.Messages.Create(parameters, cancellationToken: ct).ConfigureAwait(false);
+        BackendResult result = await Backend.CompleteAsync(request, ct).ConfigureAwait(false);
+        string? text = result.Text;
 
-        string? text = response.Content
-            .Select(b => b.Value)
-            .OfType<TextBlock>()
-            .Select(t => t.Text)
-            .FirstOrDefault();
-
-        ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, response.Usage?.InputTokens, response.Usage?.OutputTokens);
+        ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, result.InputTokens, result.OutputTokens);
 
         if (string.IsNullOrWhiteSpace(text)) return new ScenarioResult(null, null);
 

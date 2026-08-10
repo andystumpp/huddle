@@ -72,40 +72,19 @@ internal sealed class AchievementsScenario : Scenario
         IReadOnlyList<Nudge> priorNudges,
         CancellationToken ct)
     {
-        var client = new AnthropicClient();
         string userText = BuildUserText(trail, priorNudges, DateTimeOffset.UtcNow);
 
-        var parameters = new MessageCreateParams
-        {
-            Model = ModelId,
-            MaxTokens = 600,
-            System = SystemPrompt,
-            OutputConfig = new OutputConfig
-            {
-                Format = new JsonOutputFormat { Schema = ScenarioPromptHelpers.BuildNudgeDraftSchema() },
-            },
-            Messages = new List<MessageParam>
-            {
-                new()
-                {
-                    Role = Role.User,
-                    Content = new List<ContentBlockParam>
-                    {
-                        new TextBlockParam { Text = userText },
-                    },
-                },
-            },
-        };
+        var request = new ScenarioRequest(
+            Model: ModelId,
+            MaxTokens: 600,
+            SystemPrompt: SystemPrompt,
+            UserText: userText,
+            JsonSchema: ScenarioPromptHelpers.BuildNudgeDraftSchema());
 
-        Message response = await client.Messages.Create(parameters, cancellationToken: ct).ConfigureAwait(false);
+        BackendResult result = await Backend.CompleteAsync(request, ct).ConfigureAwait(false);
+        string? text = result.Text;
 
-        string? text = response.Content
-            .Select(b => b.Value)
-            .OfType<TextBlock>()
-            .Select(t => t.Text)
-            .FirstOrDefault();
-
-        ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, response.Usage?.InputTokens, response.Usage?.OutputTokens);
+        ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, result.InputTokens, result.OutputTokens);
 
         if (string.IsNullOrWhiteSpace(text)) return new ScenarioResult(null, null);
 

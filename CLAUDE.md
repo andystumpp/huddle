@@ -26,6 +26,16 @@ Every non-trivial change goes through OpenSpec: `/opsx:propose` → `/opsx:apply
 - **One iteration = one PR = one merged change.** When the user says "iteration by iteration," strip fields out rather than carry them speculatively (we dropped scenario / last-seen / strength / nudge-count from `Pattern` for exactly this reason).
 - **Lock the visual contract before storage.** Seeded in-memory data first, real persistence later. Surface the seed behind a single `static readonly` reference so swapping to a store touches one file.
 
+## Design docs
+
+Every `design.md` — and any design discussion in chat — leads with a Mermaid **sequence diagram**. The diagram is the spine of the design, not decoration; the prose hangs off it.
+
+- **Divide the flow into labeled sections** — one per distinct phase of processing (use separate diagrams per phase, or `Note over` / `rect` bands within one). Name each section.
+- **Every section states its contract.** Spell out the exact data crossing each boundary: the request/response types, their fields, invariants, and the empty/error cases. Name the real types (`ScenarioRequest`, `BackendResult`, `NudgeDraft`) — never "some data".
+- **Within each section, describe the how.** Beneath the diagram, key prose to each section explaining the processing that turns its input contract into its output contract — the steps, the branch conditions, the transforms.
+
+The bar: a reader can implement any one section from its contract + how alone, without reverse-engineering the others.
+
 ## Engineering principles
 
 - **YAGNI.** Default to no. Add a field, abstraction, or framework when a current change needs it, not before. If we removed it last iteration, don't sneak it back this one. The skill notes in spec deltas (D2-style "deliberately omitted, likely back later") are the right format — name what's missing and why.
