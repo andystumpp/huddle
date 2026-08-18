@@ -43,6 +43,13 @@ public sealed partial class PeekTabWindow : Window
             p.IsAlwaysOnTop = true;
         }
 
+        // The tab is an on-screen widget, not a window to switch to — keep it out
+        // of the taskbar and Alt-Tab so the app shows a single button (the panel).
+        // AppWindow.IsShownInSwitchers does not drop the taskbar button on this SDK,
+        // so mark it a tool window (WS_EX_TOOLWINDOW), which the shell excludes.
+        int exStyle = GetWindowLong(_hwnd, GWL_EXSTYLE);
+        SetWindowLong(_hwnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW);
+
         if (Content is FrameworkElement fe)
         {
             fe.Loaded += (_, _) => BuildPulseStoryboard();
@@ -114,6 +121,15 @@ public sealed partial class PeekTabWindow : Window
         PulseScale.ScaleX = 1;
         PulseScale.ScaleY = 1;
     }
+
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TOOLWINDOW = 0x00000080;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
     [DllImport("user32.dll")]
     private static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
