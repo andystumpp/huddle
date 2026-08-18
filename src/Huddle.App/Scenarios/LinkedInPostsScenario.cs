@@ -52,21 +52,37 @@ internal sealed class LinkedInPostsScenario : Scenario
           AI that holds across stacks. "When the symptom is geometric and the
           framework insists everything's fine, drop a layer to read ground
           truth." That's the post.
-        - The ANCHOR: at most one or two lines proving the user actually lived
-          it, so it reads as earned experience and not a LinkedIn platitude.
-          Keep it brief AND abstract: describe the SHAPE of the situation
-          ("three genuinely divergent directions for the same feature"), never
-          the project-specific specifics of what each one was. A reader in a
-          different domain entirely (different stack, different kind of software)
-          must be able to map it onto their own work. Strip project nouns, API
-          names, line counts, framework versions. If the reader needs to know
-          what you were building to follow the point, the anchor is too
-          specific: generalize it or stay silent.
+        - The ANCHOR: one or two lines of CONCRETE, earned detail that prove you
+          actually lived it — the surprising symptom, the exact moment it
+          clicked, the number that made you stop. Strip the project NOUNS (API
+          names, framework versions, product names) so a reader in another
+          domain can map it on, but KEEP the specificity: a vivid, particular
+          detail is the whole difference between earned experience and a
+          platitude. "I lost time to a query" is NOT an anchor, it is a
+          placeholder — abstracted to nothing. "The query was correct for every
+          range except the one that started at midnight" IS an anchor. If you
+          cannot name a concrete, non-generic detail, you did not actually learn
+          anything here: stay silent.
 
         Litmus test before you emit: could an engineer in a completely
         different domain (different stack, different kind of software) repost
         this lesson to their team and have it land? If it only makes sense to
         someone who knows this project, generalize the anchor or stay silent.
+
+        Novelty gate — apply this ruthlessly, it is the one that matters most:
+        post ONLY if the insight is genuinely NON-OBVIOUS to a staff- or
+        principal-level engineer. Most real work re-encounters things the field
+        settled years ago, and that is not a post no matter how cleanly you
+        phrase it. Before drafting, ask: "Did I actually learn something, or did
+        I just run into a classic?" If the lesson is canon — "today" depends on
+        a timezone / store UTC and convert on display, cache invalidation is
+        hard, off-by-one at boundaries, "it depends", premature optimization,
+        naming things is hard, boundaries/edge cases are where bugs hide — STAY
+        SILENT. A crisp aphorism about a well-known problem is still a well-known
+        problem, and a principal audience will read it as trying to sound deep
+        about the basics. Emit only for a genuinely fresh observation, a sharp
+        or contrarian opinion, or a specific hard-won detail most people have
+        not hit. When in doubt, silence beats a smart-sounding truism.
 
         A good post idea:
         - Leads with the transferable pattern; uses the specific work as a short
@@ -90,9 +106,10 @@ internal sealed class LinkedInPostsScenario : Scenario
 
         If the trail shows only routine work — context switching, fixing a
         typo, scrolling — return {"emit": false}. Silent beats a forced post.
-        Equally, if the only thing you can say is hyper-specific to this project
-        and won't generalize, stay silent rather than ship a post no one else
-        can use.
+        Equally, stay silent if the only thing you can say is hyper-specific to
+        this project and won't generalize, OR if the only lesson is a well-known
+        classic that fails the novelty gate above. Most hours should produce no
+        post; that is correct, not a failure.
 
         When you stay silent, populate `reason` with a single sentence —
         what specifically about the trail kept you from drafting? Be
