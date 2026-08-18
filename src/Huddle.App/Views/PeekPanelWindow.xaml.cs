@@ -87,6 +87,14 @@ public sealed partial class PeekPanelWindow : Window
         Title = "Huddle";
         _appWindow.Title = "Huddle";
 
+        // Set the taskbar / titlebar icon explicitly — an unpackaged WinUI window
+        // otherwise falls back to a generic icon even with <ApplicationIcon> set.
+        try
+        {
+            _appWindow.SetIcon(System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico"));
+        }
+        catch { /* icon is cosmetic; never block startup on it */ }
+
         ConfigureChrome();
         TrySetAcrylicBackdrop();
 

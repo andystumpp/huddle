@@ -39,11 +39,14 @@ internal sealed class CliBackend : IScenarioBackend
             // curly quotes, accents) into mojibake that persists into the nudge.
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
+            StandardInputEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        // The prompt goes on stdin, NOT as a `-p <text>` argument: a large trail
+        // (Learnings sends ~200 moments ≈ 60K chars) blows the Windows command-line
+        // length limit (~32K), which made Process.Start throw and the call return null.
         psi.ArgumentList.Add("-p");
-        psi.ArgumentList.Add(request.UserText);
         psi.ArgumentList.Add("--model");
         psi.ArgumentList.Add(ModelAlias(request.Model));
         psi.ArgumentList.Add("--append-system-prompt");
@@ -81,14 +84,24 @@ internal sealed class CliBackend : IScenarioBackend
             return new BackendResult(null, null, null);
         }
 
-        // The prompt is passed via -p, so there is no stdin payload. Close it
-        // immediately to signal EOF — a GUI parent has no console stdin, and
-        // otherwise `claude` waits on it ("no stdin data received in 3s…").
-        try { process.StandardInput.Close(); } catch { /* stream already gone */ }
-
-        // Read both streams before waiting so a large payload can't deadlock the pipe.
+        // Drain stdout/stderr before writing stdin so a large prompt or response
+        // can't deadlock the pipes.
         Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
         Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+
+        // Feed the prompt on stdin, then close to signal EOF.
+        try
+        {
+            await process.StandardInput.WriteAsync(request.UserText).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Huddle] CliBackend stdin write failed: {ex.Message}");
+        }
+        finally
+        {
+            try { process.StandardInput.Close(); } catch { /* already gone */ }
+        }
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(request.WebSearch ? WebSearchTimeout : Timeout);
