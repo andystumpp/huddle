@@ -5,7 +5,7 @@ using Huddle.Models;
 
 namespace Huddle.Storage;
 
-internal static class MomentStore
+public static class MomentStore
 {
     public static async Task AddAsync(Moment moment)
     {
@@ -65,4 +65,53 @@ internal static class MomentStore
         var result = await command.ExecuteScalarAsync().ConfigureAwait(false);
         return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
     }
+
+    /// <summary>
+    /// Read-only. Moments whose summary, app, or window title contain
+    /// <paramref name="query"/>, optionally at/after <paramref name="cutoff"/>,
+    /// newest first, capped at <paramref name="limit"/>.
+    /// </summary>
+    public static async Task<IReadOnlyList<Moment>> SearchAsync(string query, DateTimeOffset? cutoff, int limit)
+    {
+        var list = new List<Moment>();
+        await using var connection = await Database.OpenReadOnlyAsync().ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT id, ts, app, window_title, summary
+              FROM moments
+             WHERE (summary LIKE $q OR app LIKE $q OR window_title LIKE $q)" + (cutoff is null ? "" : " AND ts >= $cutoff") + @"
+             ORDER BY ts DESC
+             LIMIT $limit;";
+        command.Parameters.AddWithValue("$q", "%" + query + "%");
+        if (cutoff is not null) command.Parameters.AddWithValue("$cutoff", cutoff.Value.ToUniversalTime().ToString("o"));
+        command.Parameters.AddWithValue("$limit", limit);
+        using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false)) list.Add(ReadMoment(reader));
+        return list;
+    }
+
+    /// <summary>Read-only. Moments with ts in [startUtc, endUtc), newest first.</summary>
+    public static async Task<IReadOnlyList<Moment>> BetweenAsync(DateTimeOffset startUtc, DateTimeOffset endUtc)
+    {
+        var list = new List<Moment>();
+        await using var connection = await Database.OpenReadOnlyAsync().ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT id, ts, app, window_title, summary
+              FROM moments
+             WHERE ts >= $start AND ts < $end
+             ORDER BY ts DESC;";
+        command.Parameters.AddWithValue("$start", startUtc.ToUniversalTime().ToString("o"));
+        command.Parameters.AddWithValue("$end", endUtc.ToUniversalTime().ToString("o"));
+        using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false)) list.Add(ReadMoment(reader));
+        return list;
+    }
+
+    private static Moment ReadMoment(Microsoft.Data.Sqlite.SqliteDataReader reader) => new(
+        Id: reader.GetString(0),
+        Ts: DateTimeOffset.Parse(reader.GetString(1), System.Globalization.CultureInfo.InvariantCulture),
+        App: reader.GetString(2),
+        WindowTitle: reader.GetString(3),
+        Summary: reader.GetString(4));
 }
