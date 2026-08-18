@@ -41,7 +41,12 @@ public sealed partial class PeekPanelWindow : Window
     private readonly AppWindow _appWindow;
     private readonly TickScheduler _scheduler = new();
     private readonly ObservableCollection<Moment> _moments = new();
-    private readonly ObservableCollection<Nudge> _nudges = new();
+    // Full 7-day nudge window (backing data), and the day-grouped + scenario-
+    // filtered display list bound to the repeater (day headers + nudges mixed).
+    private readonly List<Nudge> _allNudges = new();
+    private readonly ObservableCollection<object> _nudgeDisplay = new();
+    private string? _activeScenarioFilter;   // null = All
+    private static readonly TimeSpan NudgeWindow = TimeSpan.FromDays(7);
 
     private PeekTabWindow? _tab;
 
@@ -120,7 +125,7 @@ public sealed partial class PeekPanelWindow : Window
 
         // Bind the Activity / Nudges tabs to their live collections.
         MomentsRepeater.ItemsSource = _moments;
-        NudgesRepeater.ItemsSource = _nudges;
+        NudgesRepeater.ItemsSource = _nudgeDisplay;
 
         try
         {
@@ -129,9 +134,9 @@ public sealed partial class PeekPanelWindow : Window
             foreach (var m in recentMoments) _moments.Add(m);
             UpdateObservationCount();
 
-            var recentNudges = await NudgeStore.RecentAsync(MaxVisibleNudges);
-            foreach (var n in recentNudges) _nudges.Add(n);
-            UpdateNudgesSurface();
+            var windowNudges = await NudgeStore.SinceAsync(DateTimeOffset.UtcNow - NudgeWindow);
+            _allNudges.AddRange(windowNudges);   // newest-first from the query
+            RebuildNudgeDisplay();
         }
         catch (Exception ex)
         {
@@ -404,24 +409,64 @@ public sealed partial class PeekPanelWindow : Window
             if (result.Nudge is null) continue;
 
             await NudgeStore.AddAsync(result.Nudge);
-            _nudges.Insert(0, result.Nudge);
-            while (_nudges.Count > MaxVisibleNudges)
-            {
-                _nudges.RemoveAt(_nudges.Count - 1);
-            }
+            _allNudges.Insert(0, result.Nudge);
             if (!_panelSeenForWhile) _unreadNudges++;
-            UpdateNudgesSurface();
+            RebuildNudgeDisplay();
         }
     }
 
     private void UpdateNudgesSurface()
     {
-        bool any = _nudges.Count > 0;
+        bool any = _nudgeDisplay.Count > 0;
         NudgesEmptyState.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
         NudgesScroll.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-        CountNudges.Text = _nudges.Count.ToString();
-        NudgeCountText.Text = _nudges.Count.ToString();
+        CountNudges.Text = _allNudges.Count.ToString();
+        NudgeCountText.Text = _allNudges.Count.ToString();
         _tab?.UpdateCount(_unreadNudges);
+    }
+
+    /// <summary>
+    /// Rebuild the day-grouped, scenario-filtered display list from the 7-day
+    /// nudge window. Cheap enough to run on every filter change / new nudge.
+    /// </summary>
+    private void RebuildNudgeDisplay()
+    {
+        _nudgeDisplay.Clear();
+        DateTime today = DateTimeOffset.Now.Date;
+        DateTime? currentDay = null;
+        foreach (var n in _allNudges)   // newest-first
+        {
+            if (_activeScenarioFilter is not null && n.Scenario != _activeScenarioFilter) continue;
+
+            DateTime day = n.Ts.ToLocalTime().Date;
+            if (currentDay != day)
+            {
+                currentDay = day;
+                _nudgeDisplay.Add(new NudgeDayHeader(DayLabel(day, today)));
+            }
+            _nudgeDisplay.Add(n);
+        }
+        UpdateNudgesSurface();
+    }
+
+    private static string DayLabel(DateTime day, DateTime today)
+    {
+        if (day == today) return "TODAY";
+        if (day == today.AddDays(-1)) return "YESTERDAY";
+        return day.ToString("ddd · MMM d").ToUpperInvariant();
+    }
+
+    private void OnFilterChipClick(object sender, RoutedEventArgs e)
+    {
+        var clicked = (ToggleButton)sender;
+        // Single-select: force the clicked chip on, all others off.
+        foreach (var child in FilterChips.Children)
+        {
+            if (child is ToggleButton tb) tb.IsChecked = ReferenceEquals(tb, clicked);
+        }
+        string? tag = clicked.Tag as string;
+        _activeScenarioFilter = string.IsNullOrEmpty(tag) ? null : tag;
+        RebuildNudgeDisplay();
     }
 
     private async void OnRunScenariosNowClick(object sender, RoutedEventArgs e)
@@ -447,11 +492,7 @@ public sealed partial class PeekPanelWindow : Window
                 if (result.Nudge is not null)
                 {
                     await NudgeStore.AddAsync(result.Nudge);
-                    _nudges.Insert(0, result.Nudge);
-                    while (_nudges.Count > MaxVisibleNudges)
-                    {
-                        _nudges.RemoveAt(_nudges.Count - 1);
-                    }
+                    _allNudges.Insert(0, result.Nudge);
                     if (!_panelSeenForWhile) _unreadNudges++;
                     emitted++;
                 }
@@ -465,7 +506,7 @@ public sealed partial class PeekPanelWindow : Window
                 }
             }
 
-            UpdateNudgesSurface();
+            RebuildNudgeDisplay();
 
             if (emitted > 0)
             {

@@ -63,6 +63,26 @@ internal static class NudgeStore
         return list;
     }
 
+    /// <summary>All nudges emitted at or after <paramref name="cutoff"/>, newest first.</summary>
+    public static async Task<IReadOnlyList<Nudge>> SinceAsync(DateTimeOffset cutoff)
+    {
+        var list = new List<Nudge>();
+        await using var connection = await Database.OpenAsync().ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT id, ts, scenario, title, body, sources, is_starred
+              FROM nudges
+             WHERE ts >= $cutoff
+             ORDER BY ts DESC;";
+        command.Parameters.AddWithValue("$cutoff", cutoff.ToUniversalTime().ToString("o"));
+        using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            list.Add(Read(reader));
+        }
+        return list;
+    }
+
     public static async Task<IReadOnlyList<Nudge>> RecentByScenarioAsync(string scenario, int limit)
     {
         var list = new List<Nudge>(limit);
