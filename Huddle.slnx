@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Huddle.App/Huddle.App.csproj" />
+    <Project Path="src/Huddle.Core/Huddle.Core.csproj" />
+    <Project Path="src/Huddle.Mcp/Huddle.Mcp.csproj" />
   </Folder>
 </Solution>

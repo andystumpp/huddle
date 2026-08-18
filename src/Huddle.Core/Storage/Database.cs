@@ -10,7 +10,7 @@ namespace Huddle.Storage;
 /// <summary>
 /// Opens the Huddle SQLite database and applies pending migrations on startup.
 /// </summary>
-internal static class Database
+public static class Database
 {
     private const string FileName = "huddle.db";
     private const string MigrationResourcePrefix = "Huddle.Storage.Migrations.";
@@ -29,12 +29,26 @@ internal static class Database
     private static string ConnectionString =>
         $"Data Source={DatabasePath};Pooling=True;Cache=Shared";
 
+    private static string ReadOnlyConnectionString =>
+        $"Data Source={DatabasePath};Mode=ReadOnly";
+
     /// <summary>
-    /// Open a pooled connection. Caller disposes.
+    /// Open a pooled read-write connection. Caller disposes.
     /// </summary>
     public static async Task<SqliteConnection> OpenAsync()
     {
         var connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync().ConfigureAwait(false);
+        return connection;
+    }
+
+    /// <summary>
+    /// Open a read-only connection — for query-only callers such as the MCP
+    /// server that must never write or migrate. Safe alongside the app (WAL).
+    /// </summary>
+    public static async Task<SqliteConnection> OpenReadOnlyAsync()
+    {
+        var connection = new SqliteConnection(ReadOnlyConnectionString);
         await connection.OpenAsync().ConfigureAwait(false);
         return connection;
     }

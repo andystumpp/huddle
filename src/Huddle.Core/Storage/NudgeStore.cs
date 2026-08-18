@@ -6,7 +6,7 @@ using Huddle.Models;
 
 namespace Huddle.Storage;
 
-internal static class NudgeStore
+public static class NudgeStore
 {
     public static async Task AddAsync(Nudge nudge)
     {
@@ -80,6 +80,47 @@ internal static class NudgeStore
         {
             list.Add(Read(reader));
         }
+        return list;
+    }
+
+    /// <summary>
+    /// Read-only. Nudges emitted at or after <paramref name="cutoff"/>, optionally
+    /// filtered to one scenario key, newest first, capped at <paramref name="limit"/>.
+    /// </summary>
+    public static async Task<IReadOnlyList<Nudge>> SinceByScenarioAsync(string? scenario, DateTimeOffset cutoff, int limit)
+    {
+        var list = new List<Nudge>();
+        await using var connection = await Database.OpenReadOnlyAsync().ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT id, ts, scenario, title, body, sources, is_starred
+              FROM nudges
+             WHERE ts >= $cutoff" + (scenario is null ? "" : " AND scenario = $scenario") + @"
+             ORDER BY ts DESC
+             LIMIT $limit;";
+        command.Parameters.AddWithValue("$cutoff", cutoff.ToUniversalTime().ToString("o"));
+        if (scenario is not null) command.Parameters.AddWithValue("$scenario", scenario);
+        command.Parameters.AddWithValue("$limit", limit);
+        using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false)) list.Add(Read(reader));
+        return list;
+    }
+
+    /// <summary>Read-only. Nudges with ts in [startUtc, endUtc), newest first.</summary>
+    public static async Task<IReadOnlyList<Nudge>> BetweenAsync(DateTimeOffset startUtc, DateTimeOffset endUtc)
+    {
+        var list = new List<Nudge>();
+        await using var connection = await Database.OpenReadOnlyAsync().ConfigureAwait(false);
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT id, ts, scenario, title, body, sources, is_starred
+              FROM nudges
+             WHERE ts >= $start AND ts < $end
+             ORDER BY ts DESC;";
+        command.Parameters.AddWithValue("$start", startUtc.ToUniversalTime().ToString("o"));
+        command.Parameters.AddWithValue("$end", endUtc.ToUniversalTime().ToString("o"));
+        using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
+        while (await reader.ReadAsync().ConfigureAwait(false)) list.Add(Read(reader));
         return list;
     }
 
