@@ -31,6 +31,17 @@ internal static class ScenarioPromptHelpers
         };
     }
 
+    /// <summary>
+    /// The "respond with JSON matching this schema" directive appended to a prompt
+    /// when the provider has no structured-output flag (both CLI providers).
+    /// </summary>
+    public static string BuildSchemaDirective(Dictionary<string, JsonElement> schema)
+    {
+        string json = JsonSerializer.Serialize(schema);
+        return "\n\nRespond with a single JSON object matching this schema and nothing else "
+             + "— no prose, no markdown, no code fences:\n" + json;
+    }
+
     /// <summary>"Previously emitted by this scenario (newest first):" block.</summary>
     public static void AppendPriorNudges(StringBuilder sb, IReadOnlyList<Nudge> priorNudges, DateTimeOffset now, string heading)
     {

@@ -5,8 +5,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Anthropic;
-using Anthropic.Models.Messages;
 using Huddle.Models;
 
 namespace Huddle.Scenarios;
@@ -81,7 +79,7 @@ internal sealed class AchievementsScenario : Scenario
             UserText: userText,
             JsonSchema: ScenarioPromptHelpers.BuildNudgeDraftSchema());
 
-        BackendResult result = await Backend.CompleteAsync(request, ct).ConfigureAwait(false);
+        BackendResult result = await Provider.CompleteAsync(request, ct).ConfigureAwait(false);
         string? text = result.Text;
 
         ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, result.InputTokens, result.OutputTokens);

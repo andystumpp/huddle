@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using Anthropic.Models.Messages;
 using Huddle.Models;
 
 namespace Huddle.Scenarios;
@@ -23,15 +22,14 @@ internal abstract class Scenario
     public abstract int TrailSize { get; }
     public virtual int PriorNudgesSize => 10;
 
-    /// <summary>The Claude model used for this scenario's call. Sonnet by default.</summary>
-    public virtual Model ModelId => Model.ClaudeSonnet4_6;
+    /// <summary>The model name for this scenario's call (a CLI alias). Sonnet by default.</summary>
+    public virtual string ModelId => "sonnet";
 
     /// <summary>
-    /// The Claude backend for this scenario's call — API (metered) or CLI
-    /// (subscription), resolved once from config. Subclasses call
-    /// <c>Backend.CompleteAsync(...)</c> rather than the SDK directly.
+    /// The CLI provider for this scenario's call (Claude, Copilot, or Agency),
+    /// resolved once from config. Subclasses call <c>Provider.CompleteAsync(...)</c>.
     /// </summary>
-    protected IScenarioBackend Backend { get; } = ScenarioBackendFactory.Resolve();
+    protected ICliProvider Provider { get; } = CliProviderFactory.Resolve();
 
     private DateTimeOffset _lastRun = DateTimeOffset.MinValue;
     private readonly SemaphoreSlim _gate = new(1, 1);

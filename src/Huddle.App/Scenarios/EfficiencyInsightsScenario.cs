@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Anthropic.Models.Messages;
 using Huddle.Models;
 
 namespace Huddle.Scenarios;
@@ -13,12 +12,11 @@ namespace Huddle.Scenarios;
 /// dev workflow &amp; tooling, then surfaces ONE concrete, actionable improvement
 /// grounded in external best practice.
 ///
-/// CLI-only: runs a single agentic call through <see cref="CliBackend"/> with web
-/// search enabled, drawing on the user's subscription rather than the metered API.
-/// The CLI performs the search itself and emits the <see cref="NudgeDraft"/> JSON
-/// in one turn — no two-phase split (that was only needed on the API, where web
-/// citations are incompatible with structured output). If the CLI is unavailable,
-/// the scenario simply no-emits; there is no metered API fallback by design.
+/// Runs a single agentic call through the configured CLI provider with web search
+/// enabled, drawing on the user's subscription. The CLI performs the search itself
+/// and emits the <see cref="NudgeDraft"/> JSON in one turn. On a provider without a
+/// web-search capability the call runs fetch-only or ungrounded — it never fabricates
+/// a citation. If the CLI is unavailable, the scenario simply no-emits.
 /// </summary>
 internal sealed class EfficiencyInsightsScenario : Scenario
 {
@@ -29,12 +27,7 @@ internal sealed class EfficiencyInsightsScenario : Scenario
     public override TimeSpan Cadence => TimeSpan.FromHours(6);
     public override int TrailSize => 60;
     public override int PriorNudgesSize => 10;
-    public override Model ModelId => Model.ClaudeOpus4_8;
-
-    // This scenario always runs on the CLI (it needs off-meter web search),
-    // regardless of HUDDLE_SCENARIO_BACKEND — so it uses its own CLI backend
-    // rather than the flag-resolved base-class Backend.
-    private readonly IScenarioBackend _cli = new CliBackend();
+    public override string ModelId => "opus";
 
     private const string SystemPrompt = """
         You are Huddle's Efficiency Insights scenario.
@@ -99,7 +92,7 @@ internal sealed class EfficiencyInsightsScenario : Scenario
             Effort: Effort.High,
             WebSearch: true);
 
-        BackendResult result = await _cli.CompleteAsync(request, ct).ConfigureAwait(false);
+        BackendResult result = await Provider.CompleteAsync(request, ct).ConfigureAwait(false);
         string? text = result.Text;
 
         ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, result.InputTokens, result.OutputTokens);
