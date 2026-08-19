@@ -1,21 +1,52 @@
 # moment-capture Specification
 
 ## Purpose
-TBD - created by archiving change add-manual-capture-and-vision. Update Purpose after archive.
-## Requirements
-### Requirement: Primary display capture
 
-When the trigger fires, the system SHALL capture the contents of the primary display, resize the captured frame so the longest edge is at most 1280 px (preserving aspect ratio), and encode the result as a JPEG at approximately 80 % quality. The captured frame SHALL be held in memory only — it SHALL NOT be written to disk.
+Capturing a frame of what the user is doing on a scheduled tick, turning it into a short intent summary via the configured local CLI provider, and persisting only that summary. Covers capture scope (full primary display or active window), sensitive-window suppression, foreground context, the ephemeral screenshot handed to the CLI, and the SQLite moment store.
+
+## Requirements
+
+### Requirement: Frame capture and encoding
+
+When the trigger fires and the foreground window is not suppressed, the system SHALL capture the configured target (the full primary display by default, or the active window when so configured — see "Capture scope is configurable"), resize the captured frame so the longest edge is at most 1280 px (preserving aspect ratio), and encode the result as a JPEG at approximately 80 % quality. The encoded frame SHALL be handed to the CLI through an ephemeral temporary file (see "The screenshot is ephemeral"); only the resulting summary text is persisted.
 
 #### Scenario: Capture produces a JPEG under the resize cap
 
 - **WHEN** the user clicks the trigger on a standard single-monitor setup
-- **THEN** the in-memory JPEG has its longest edge ≤ 1280 px and the raw bitmap is never written to disk
+- **THEN** the JPEG has its longest edge ≤ 1280 px, and after the vision call only its summary text is retained
 
 #### Scenario: Capture failure is handled
 
 - **WHEN** the capture step throws (e.g., DRM-protected foreground content, GPU exclusivity)
-- **THEN** the error is caught, no API call is made, and the panel header briefly shows "Error: capture failed" for ~3 s
+- **THEN** the error is caught, no CLI call is made, and the panel header briefly shows "Error: capture failed" for ~3 s
+
+### Requirement: Capture scope is configurable
+
+The configuration SHALL support a capture scope of either the full primary display or the active window only, defaulting to the full primary display. When the scope is the active window, the system SHALL capture only the foreground window's own pixels (rendering the window directly rather than reading the screen region), so that windows overlapping or behind it are not captured. When the scope is the active window, the denylist check and the capture SHALL therefore concern the same single window.
+
+#### Scenario: Active-window scope captures only the focused window
+
+- **WHEN** the capture scope is set to the active window
+- **THEN** the produced image contains only the foreground window's own content, not the full desktop and not any window overlapping it
+
+#### Scenario: Full-screen scope is the default
+
+- **WHEN** no capture scope is configured
+- **THEN** the full primary display is captured
+
+### Requirement: Capture is suppressed for sensitive windows
+
+The configuration SHALL support a denylist of foreground application names and window-title substrings. When the foreground window matches the denylist at tick time, the system SHALL skip the capture entirely — no screenshot is taken and no moment is produced for that tick.
+
+#### Scenario: A denylisted window is skipped
+
+- **WHEN** the capture tick fires and the foreground app or window title matches a denylist entry
+- **THEN** no screenshot is captured, no CLI call is made, and no moment is stored for that tick
+
+#### Scenario: Non-matching windows capture normally
+
+- **WHEN** the foreground window does not match any denylist entry
+- **THEN** the capture proceeds as normal
 
 ### Requirement: Foreground window context
 
@@ -33,41 +64,41 @@ The system SHALL read the foreground window's process name (with a `.exe` suffix
 
 ### Requirement: Claude vision call
 
-The system SHALL send the captured JPEG, the foreground context, and a list of the most recent prior moments to the Claude API via the official Anthropic C# SDK, using the model `claude-sonnet-4-6` and `max_tokens` of `250`. The system prompt SHALL instruct Claude to infer what the user is currently trying to accomplish — framing the response as **intent** ("you're trying to X", "you're verifying X") rather than **description** ("you're looking at X") — in a second-person, dry, specific, 1–2 sentence reply, hedging when the trail doesn't pin the goal down and committing when the trajectory is unambiguous. The user message SHALL contain the image, then a "Recent moments" text block listing up to 6 prior moments newest-first (relative time, app, abbreviated window title, prior summary), then a `Foreground app: {app}\nWindow title: {title}` block describing the current frame. When no prior moments exist, the "Recent moments" block SHALL be omitted entirely.
+The system SHALL produce each moment summary by sending the captured screenshot and the foreground context to the **selected local CLI provider** (Claude, Copilot, or Agency), not to any API/SDK. The captured JPEG SHALL be written to a temporary file and attached to a single non-interactive CLI prompt — for the Claude provider via an `@<path>` reference in the prompt, for the Copilot/Agency provider via `--attachment <path>`. The prompt SHALL instruct the model to infer what the user is currently trying to accomplish — framing the response as **intent** ("you're trying to X", "you're verifying X") rather than **description** ("you're looking at X") — in a second-person, dry, specific, 1–2 sentence reply, hedging when the trail doesn't pin the goal down and committing when the trajectory is unambiguous. The prompt SHALL include, when present, a "Recent moments" block listing up to 6 prior moments newest-first (relative time, app, abbreviated window title, prior summary), and a `Foreground app: {app}\nWindow title: {title}` block for the current frame. When no prior moments exist, the "Recent moments" block SHALL be omitted. The CLI's stdout text SHALL be taken as the moment summary.
 
 #### Scenario: Successful call returns an intent-framed summary
 
-- **WHEN** the API call completes successfully with sufficient trail
-- **THEN** the response's first text block is treated as the moment summary and reads as an inferred goal ("you're trying to / you're verifying / you're likely working on …") rather than a screen description
+- **WHEN** the CLI call completes successfully with sufficient trail
+- **THEN** its stdout is treated as the moment summary and reads as an inferred goal ("you're trying to / you're verifying / you're likely working on …") rather than a screen description
+
+#### Scenario: The screenshot is attached to the CLI
+
+- **WHEN** the vision call runs on the Claude provider
+- **THEN** the screenshot path is referenced with `@<path>` in the prompt; on the Copilot/Agency provider it is passed with `--attachment <path>`
 
 #### Scenario: First-ever capture has no trail
 
 - **WHEN** the call fires with an empty moment store
-- **THEN** the user message contains only the image and the foreground block; no "Recent moments" section is rendered, and the model still produces a single-shot intent-framed summary
+- **THEN** the prompt contains only the image and the foreground block; no "Recent moments" section is rendered, and the model still produces a single-shot intent-framed summary
 
 #### Scenario: Trail is included for subsequent captures
 
 - **WHEN** the call fires with N existing moments in the store (1 ≤ N ≤ 6)
-- **THEN** the user message contains a "Recent moments" block with those N moments listed newest-first, ahead of the current foreground block
+- **THEN** the prompt contains a "Recent moments" block with those N moments listed newest-first, ahead of the current foreground block
 
 #### Scenario: Trail is capped at 6 moments
 
 - **WHEN** the moment store contains more than 6 moments
 - **THEN** only the 6 most recent are included in the "Recent moments" block
 
-#### Scenario: Model is Sonnet 4.6
+### Requirement: The screenshot is ephemeral
 
-- **WHEN** the API call is sent
-- **THEN** the model field is `claude-sonnet-4-6` and the request's `max_tokens` is `250`
+The temporary screenshot file handed to the CLI SHALL be deleted immediately after the call returns (success or failure). Only the resulting text summary is persisted in the moment store; the raw image SHALL NOT be stored.
 
-### Requirement: API key from environment
+#### Scenario: Temp image is removed after the call
 
-The system SHALL read the Anthropic API key from the `ANTHROPIC_API_KEY` environment variable (the SDK does this automatically). If the variable is unset or empty, the system SHALL NOT attempt the API call; instead, the panel header SHALL briefly display "Set ANTHROPIC_API_KEY" for ~3 s and an error entry SHALL be written to the log file.
-
-#### Scenario: Missing API key
-
-- **WHEN** the user clicks the trigger and `ANTHROPIC_API_KEY` is unset
-- **THEN** no API call is attempted, the panel header shows "Set ANTHROPIC_API_KEY", and an error entry is appended to the moments log
+- **WHEN** a vision call completes, whether it succeeded or failed
+- **THEN** the temporary screenshot file is deleted, and only the moment summary text is written to the store
 
 ### Requirement: Scheduled capture tick
 
@@ -75,8 +106,8 @@ The capture pipeline SHALL be driven by a tick scheduler with a 180-second perio
 
 #### Scenario: Tick fires immediately on app start
 
-- **WHEN** `Huddle.exe` launches with a valid API key configured
-- **THEN** the capture pipeline (capture → Claude vision call → store) runs once within a few seconds of startup
+- **WHEN** `Huddle.exe` launches
+- **THEN** the capture pipeline (capture → CLI vision call → store) runs once within a few seconds of startup, with the configured CLI handling its own authentication
 
 #### Scenario: Subsequent ticks fire every 180 seconds
 
@@ -95,7 +126,7 @@ The capture pipeline SHALL be driven by a tick scheduler with a 180-second perio
 
 ### Requirement: SQLite moment store
 
-The app SHALL persist moments in a local SQLite database at `%LOCALAPPDATA%\Huddle\huddle.db`. The store SHALL contain a single table `moments` with columns matching ADR 0001's schema — `id` (TEXT PRIMARY KEY), `ts` (TEXT, ISO-8601 UTC), `app` (TEXT), `window_title` (TEXT), `summary` (TEXT) — plus an index `idx_moments_ts` on `ts` descending. Each successful capture SHALL append one row. The captured frame SHALL NOT be persisted.
+The app SHALL persist moments in a local SQLite database at `%LOCALAPPDATA%\Huddle\huddle.db`. The store SHALL contain a single table `moments` with columns matching ADR 0001's schema — `id` (TEXT PRIMARY KEY), `ts` (TEXT, ISO-8601 UTC), `app` (TEXT), `window_title` (TEXT), `summary` (TEXT) — plus an index `idx_moments_ts` on `ts` descending. Each successful capture SHALL append one row. The captured frame SHALL NOT be persisted in the store — it exists only as the ephemeral temporary file handed to the CLI (see "The screenshot is ephemeral"), deleted immediately after the call.
 
 #### Scenario: Database is created on first run
 
@@ -104,11 +135,10 @@ The app SHALL persist moments in a local SQLite database at `%LOCALAPPDATA%\Hudd
 
 #### Scenario: A successful capture inserts a row
 
-- **WHEN** a tick completes the capture + Claude vision call successfully
+- **WHEN** a tick completes the capture + CLI vision call successfully
 - **THEN** a single new row is inserted into `moments` with the new ULID, the UTC timestamp, the foreground app, the window title, and the summary text
 
-#### Scenario: Frame is not persisted
+#### Scenario: Frame is not persisted in the store
 
 - **WHEN** any tick runs end-to-end (success or failure)
-- **THEN** the captured JPEG bytes are not written to any file on disk
-
+- **THEN** the captured JPEG is written only to the ephemeral temporary file used for the CLI call, is deleted immediately after that call, and no image bytes are stored in `moments` or otherwise retained
