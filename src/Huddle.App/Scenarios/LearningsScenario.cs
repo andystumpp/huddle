@@ -5,8 +5,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Anthropic;
-using Anthropic.Models.Messages;
 using Huddle.Models;
 
 namespace Huddle.Scenarios;
@@ -26,7 +24,7 @@ internal sealed class LearningsScenario : Scenario
     public override TimeSpan Cadence => TimeSpan.FromHours(24);
     public override int TrailSize => 200;
     public override int PriorNudgesSize => 5;
-    public override Model ModelId => Model.ClaudeOpus4_8;
+    public override string ModelId => "opus";
 
     private const string SystemPrompt = """
         You are Huddle's Learnings scenario.
@@ -124,7 +122,7 @@ internal sealed class LearningsScenario : Scenario
             UserText: userText,
             JsonSchema: ScenarioPromptHelpers.BuildNudgeDraftSchema());
 
-        BackendResult result = await Backend.CompleteAsync(request, ct).ConfigureAwait(false);
+        BackendResult result = await Provider.CompleteAsync(request, ct).ConfigureAwait(false);
         string? text = result.Text;
 
         ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, result.InputTokens, result.OutputTokens);

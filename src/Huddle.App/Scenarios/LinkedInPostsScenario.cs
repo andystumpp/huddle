@@ -5,8 +5,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Anthropic;
-using Anthropic.Models.Messages;
 using Huddle.Models;
 
 namespace Huddle.Scenarios;
@@ -23,7 +21,7 @@ internal sealed class LinkedInPostsScenario : Scenario
     public override TimeSpan Cadence => TimeSpan.FromHours(1);
     public override int TrailSize => 20;
     public override int PriorNudgesSize => 10;
-    public override Model ModelId => Model.ClaudeOpus4_8;
+    public override string ModelId => "opus";
 
     private const string SystemPrompt = """
         You are Huddle's LinkedIn Posts scenario.
@@ -140,7 +138,7 @@ internal sealed class LinkedInPostsScenario : Scenario
             // this applies high effort + adaptive thinking; on the CLI, --effort high.
             Effort: Effort.High);
 
-        BackendResult result = await Backend.CompleteAsync(request, ct).ConfigureAwait(false);
+        BackendResult result = await Provider.CompleteAsync(request, ct).ConfigureAwait(false);
         string? text = result.Text;
 
         ScenarioDiagnostics.LogRun(Key, ModelId.ToString(), SystemPrompt, userText, text, result.InputTokens, result.OutputTokens);

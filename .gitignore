@@ -3,6 +3,16 @@
 huddle.env
 .env
 
+# Machine-specific provider config (non-secret, but per-machine)
+huddle.config.json
+
+# Local runtime data — lives in %LOCALAPPDATA%\Huddle (never in the repo), guard anyway
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+scenarios.log
+
 bin/
 obj/
 *.user

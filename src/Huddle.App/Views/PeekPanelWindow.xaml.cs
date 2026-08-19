@@ -13,6 +13,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Graphics;
 using WinRT.Interop;
 using Huddle.Capture;
+using Huddle.Config;
 using Huddle.Models;
 using Huddle.Scenarios;
 using Huddle.Storage;
@@ -369,7 +370,15 @@ public sealed partial class PeekPanelWindow : Window
             var recent = await MomentStore.RecentAsync(TrailMoments);
 
             var foreground = ForegroundContext.Read();
-            byte[] jpeg = await ScreenCapture.CaptureAsJpegAsync();
+
+            // Sensitive-window guard: never screenshot a denylisted foreground.
+            if (IsCaptureDenied(foreground))
+            {
+                Debug.WriteLine($"[Huddle] capture skipped (denylist): {foreground.App} — {foreground.WindowTitle}");
+                return;
+            }
+
+            byte[] jpeg = await ScreenCapture.CaptureAsJpegAsync(HuddleConfig.Current.CaptureActiveWindowOnly);
             string summary = await MomentExtractor.ExtractAsync(jpeg, foreground, recent);
 
             var moment = new Moment(
@@ -394,6 +403,26 @@ public sealed partial class PeekPanelWindow : Window
         {
             Debug.WriteLine($"[Huddle] tick failed: {ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// True when the foreground app name or window title contains a denylist entry
+    /// (case-insensitive substring). A match suppresses the whole capture tick.
+    /// </summary>
+    private static bool IsCaptureDenied(ForegroundInfo foreground)
+    {
+        var denylist = HuddleConfig.Current.CaptureDenylist;
+        if (denylist.Count == 0) return false;
+        foreach (var entry in denylist)
+        {
+            if (string.IsNullOrWhiteSpace(entry)) continue;
+            if (foreground.App.Contains(entry, StringComparison.OrdinalIgnoreCase) ||
+                foreground.WindowTitle.Contains(entry, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private async Task RunScenariosAsync()

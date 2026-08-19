@@ -1,28 +1,27 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
-using Anthropic;
-using Anthropic.Models.Messages;
 using Huddle.Capture;
-using Huddle.Config;
 using Huddle.Models;
+using Huddle.Scenarios;
 
 namespace Huddle.Vision;
 
 /// <summary>
-/// Sends a captured frame + foreground context to Claude and returns the
-/// 1-2 sentence moment summary it produces.
+/// Sends a captured frame + foreground context to the configured CLI provider and
+/// returns the 1-2 sentence moment summary it produces. The screenshot is written to
+/// a temporary file for the CLI to attach and deleted immediately after the call —
+/// only the summary text is ever persisted.
 /// </summary>
 internal static class MomentExtractor
 {
     private const string SystemPrompt = """
-        You are Huddle's eye. You see one screenshot of the user's current screen, the
-        foreground app and window title, and brief summaries of the user's recent moments
-        (prior captures, newest first).
+        You are Huddle's eye. You see one screenshot of what the user is currently looking
+        at (their active window, or their full screen), the foreground app and window title,
+        and brief summaries of the user's recent moments (prior captures, newest first).
 
         In a single 1-2 sentence response, infer what the user is currently trying to
         accomplish. Read the trail of recent moments for trajectory — what they've been
@@ -43,7 +42,7 @@ internal static class MomentExtractor
         what to do about it. Do not greet, summarize, or meta-comment.
         """;
 
-    private static AnthropicClient? s_client;
+    private static readonly ICliProvider s_provider = CliProviderFactory.Resolve();
 
     public static async Task<string> ExtractAsync(
         byte[] jpegBytes,
@@ -51,51 +50,23 @@ internal static class MomentExtractor
         IReadOnlyList<Moment> recent,
         CancellationToken ct = default)
     {
+        // The screenshot is ephemeral: written for the CLI to attach, deleted in the
+        // finally whether the call succeeds or fails. Only the summary is stored.
+        string tempPath = Path.Combine(
+            Path.GetTempPath(), $"huddle-frame-{Guid.NewGuid():N}.jpg");
         try
         {
-            var client = GetOrCreateClient();
-            string base64Image = Convert.ToBase64String(jpegBytes);
+            await File.WriteAllBytesAsync(tempPath, jpegBytes, ct).ConfigureAwait(false);
 
-            string contextText = BuildContextText(foreground, recent, DateTimeOffset.UtcNow);
+            string prompt = SystemPrompt + "\n\n"
+                + BuildContextText(foreground, recent, DateTimeOffset.UtcNow);
 
-            var parameters = new MessageCreateParams
-            {
-                Model = Model.ClaudeSonnet4_6,
-                MaxTokens = 250,
-                System = SystemPrompt,
-                Messages = new List<MessageParam>
-                {
-                    new()
-                    {
-                        Role = Role.User,
-                        Content = new List<ContentBlockParam>
-                        {
-                            new ImageBlockParam
-                            {
-                                Source = new Base64ImageSource
-                                {
-                                    Data = base64Image,
-                                    MediaType = "image/jpeg",
-                                },
-                            },
-                            new TextBlockParam { Text = contextText },
-                        },
-                    },
-                },
-            };
-
-            Message response = await client.Messages.Create(parameters, cancellationToken: ct)
+            string? text = await s_provider.DescribeImageAsync(tempPath, prompt, ct)
                 .ConfigureAwait(false);
-
-            string? text = response.Content
-                .Select(b => b.Value)
-                .OfType<TextBlock>()
-                .Select(t => t.Text)
-                .FirstOrDefault();
 
             if (string.IsNullOrWhiteSpace(text))
             {
-                throw new VisionCallException("Response contained no text.");
+                throw new VisionCallException("CLI returned no summary text.");
             }
             return text.Trim();
         }
@@ -107,11 +78,15 @@ internal static class MomentExtractor
         {
             throw new VisionCallException($"{ex.GetType().Name}: {ex.Message}", ex);
         }
+        finally
+        {
+            try { File.Delete(tempPath); } catch { /* best effort */ }
+        }
     }
 
     /// <summary>
-    /// Build the user-message text block: optional "Recent moments" trail (up to 6,
-    /// newest first), then the current foreground line.
+    /// Build the context text: optional "Recent moments" trail (up to 6, newest
+    /// first), then the current foreground line.
     /// </summary>
     private static string BuildContextText(
         ForegroundInfo foreground,
@@ -179,21 +154,6 @@ internal static class MomentExtractor
             }
         }
         return sb.ToString().Trim();
-    }
-
-    private static AnthropicClient GetOrCreateClient()
-    {
-        if (s_client is not null) return s_client;
-
-        var key = EnvConfig.Resolve("ANTHROPIC_API_KEY");
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            throw new VisionCallException("ANTHROPIC_API_KEY not configured");
-        }
-        // Promote into process env so the SDK's automatic lookup finds it.
-        Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", key);
-        s_client = new AnthropicClient();
-        return s_client;
     }
 }
 

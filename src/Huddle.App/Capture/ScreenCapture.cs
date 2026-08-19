@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Windows.Graphics.Imaging;
@@ -8,19 +7,29 @@ using Windows.Storage.Streams;
 namespace Huddle.Capture;
 
 /// <summary>
-/// Captures the primary display via Win32 BitBlt and encodes as JPEG.
+/// Captures a frame and encodes it as JPEG. Two scopes, chosen by the caller:
+/// the full primary display (rich multi-window context), or the active window only
+/// (via <c>PrintWindow</c> — only the focused window's own pixels, so nothing
+/// overlapping it is captured and the capture scope matches the foreground denylist
+/// check exactly).
 /// </summary>
 internal static class ScreenCapture
 {
+    /// <param name="activeWindowOnly">
+    /// True captures just the foreground window; false captures the whole primary display.
+    /// </param>
     /// <param name="maxLongEdge">Longest edge of the resized image, in pixels.</param>
     /// <param name="qualityPercent">JPEG quality, 1-100.</param>
     public static async Task<byte[]> CaptureAsJpegAsync(
+        bool activeWindowOnly = false,
         int maxLongEdge = 1280,
         int qualityPercent = 80)
     {
         try
         {
-            (byte[] bgra, int width, int height) = GrabPrimaryDisplayBgra();
+            (byte[] bgra, int width, int height) = activeWindowOnly
+                ? GrabForegroundWindowBgra()
+                : GrabPrimaryDisplayBgra();
             return await EncodeToJpegAsync(bgra, width, height, maxLongEdge, qualityPercent)
                 .ConfigureAwait(false);
         }
@@ -41,7 +50,66 @@ internal static class ScreenCapture
 
         IntPtr screenDc = GetDC(IntPtr.Zero);
         if (screenDc == IntPtr.Zero) throw new ScreenCaptureException("GetDC failed.");
+        try
+        {
+            return RenderToBgra(screenDc, width, height,
+                (memDc) =>
+                {
+                    if (!BitBlt(memDc, 0, 0, width, height, screenDc, 0, 0, SRCCOPY))
+                    {
+                        throw new ScreenCaptureException("BitBlt failed.");
+                    }
+                });
+        }
+        finally
+        {
+            ReleaseDC(IntPtr.Zero, screenDc);
+        }
+    }
 
+    private static (byte[] bgra, int width, int height) GrabForegroundWindowBgra()
+    {
+        IntPtr hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) throw new ScreenCaptureException("No foreground window.");
+        if (IsIconic(hwnd)) throw new ScreenCaptureException("Foreground window is minimized.");
+        if (!GetWindowRect(hwnd, out RECT rect)) throw new ScreenCaptureException("GetWindowRect failed.");
+
+        int width = rect.Right - rect.Left;
+        int height = rect.Bottom - rect.Top;
+        if (width <= 0 || height <= 0)
+        {
+            throw new ScreenCaptureException($"Invalid window size: {width}x{height}.");
+        }
+
+        IntPtr screenDc = GetDC(IntPtr.Zero);
+        if (screenDc == IntPtr.Zero) throw new ScreenCaptureException("GetDC failed.");
+        try
+        {
+            return RenderToBgra(screenDc, width, height,
+                (memDc) =>
+                {
+                    // PW_RENDERFULLCONTENT renders the window's own surface — including
+                    // hardware-accelerated content (Chrome, Electron, WinUI) — so only
+                    // this window's pixels are captured, not anything overlapping it.
+                    if (!PrintWindow(hwnd, memDc, PW_RENDERFULLCONTENT))
+                    {
+                        throw new ScreenCaptureException("PrintWindow failed.");
+                    }
+                });
+        }
+        finally
+        {
+            ReleaseDC(IntPtr.Zero, screenDc);
+        }
+    }
+
+    /// <summary>
+    /// Allocates a top-down 32-bit DIB of <paramref name="width"/>×<paramref name="height"/>,
+    /// runs <paramref name="draw"/> to paint into it, then reads the pixels back as BGRA.
+    /// </summary>
+    private static (byte[] bgra, int width, int height) RenderToBgra(
+        IntPtr screenDc, int width, int height, Action<IntPtr> draw)
+    {
         IntPtr memDc = IntPtr.Zero;
         IntPtr hBitmap = IntPtr.Zero;
         try
@@ -55,10 +123,7 @@ internal static class ScreenCapture
             IntPtr oldBitmap = SelectObject(memDc, hBitmap);
             try
             {
-                if (!BitBlt(memDc, 0, 0, width, height, screenDc, 0, 0, SRCCOPY))
-                {
-                    throw new ScreenCaptureException("BitBlt failed.");
-                }
+                draw(memDc);
             }
             finally
             {
@@ -90,7 +155,6 @@ internal static class ScreenCapture
         {
             if (hBitmap != IntPtr.Zero) DeleteObject(hBitmap);
             if (memDc != IntPtr.Zero) DeleteDC(memDc);
-            ReleaseDC(IntPtr.Zero, screenDc);
         }
     }
 
@@ -143,8 +207,13 @@ internal static class ScreenCapture
     private const uint SRCCOPY = 0x00CC0020;
     private const int BI_RGB = 0;
     private const uint DIB_RGB_COLORS = 0;
+    private const uint PW_RENDERFULLCONTENT = 0x00000002;
 
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int nIndex);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] private static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
     [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
     [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
@@ -160,6 +229,15 @@ internal static class ScreenCapture
     private static extern int GetDIBits(
         IntPtr hdc, IntPtr hbmp, uint uStartScan, uint cScanLines,
         [Out] byte[] lpvBits, ref BITMAPINFO lpbi, uint uUsage);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct BITMAPINFOHEADER
