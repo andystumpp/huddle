@@ -54,7 +54,7 @@ A **custom scenario** needs only `key` and `systemPrompt`; everything else defau
 | Field | Default | Notes |
 | --- | --- | --- |
 | `key` | *(required)* | Unique id; must not collide with a built-in or another custom. |
-| `systemPrompt` | *(required)* | The prompt — describe **when to emit, when to stay silent, and the voice**. Do not describe the output JSON; that shape is enforced for you. |
+| `systemPrompt` | *(required)* | The prompt — describe **when to emit, when to stay silent, and the voice**. Do not describe the output JSON; that shape is enforced for you. May be a **string, or an array of lines** joined with newlines into one prompt (see below). |
 | `displayName` | `key` uppercased | The uppercase label on the nudge card. |
 | `accentColorHex` | `#6BA6FF` | Nudge-card accent. |
 | `cadenceHours` | `6` | How often it may run. |
@@ -66,6 +66,22 @@ A **custom scenario** needs only `key` and `systemPrompt`; everything else defau
 
 A custom entry that is invalid (missing `key`/`systemPrompt`, a colliding `key`, or an
 unrecognized `model`/`effort`) is skipped; the other scenarios still run.
+
+**Writing a long prompt.** JSON strings can't hold line breaks, so a long `systemPrompt`
+can instead be an **array of lines** — each element is one line, and they are joined with
+newlines into a single prompt (it is still one prompt, not several):
+
+```jsonc
+"systemPrompt": [
+  "You are Huddle's Value Delivery scenario.",
+  "",
+  "Watching the recent trail, surface ONE concrete, higher-leverage move,",
+  "or return {\"emit\": false} with a reason."
+]
+```
+
+The config file may also contain `//` comments and trailing commas (as the annotated
+examples here use), so you can document your own config inline.
 
 Every field at once, for reference (only `key` and `systemPrompt` are required — delete
 any other line to accept its default):
