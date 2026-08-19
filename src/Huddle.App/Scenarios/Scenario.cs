@@ -15,7 +15,6 @@ namespace Huddle.Scenarios;
 internal abstract class Scenario
 {
     public abstract string Key { get; }
-    public abstract string Name { get; }
     public abstract string DisplayName { get; }
     public abstract string AccentColorHex { get; }
     public abstract TimeSpan Cadence { get; }

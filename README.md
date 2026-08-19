@@ -28,9 +28,67 @@ through its own login.
 | `model` | model name | `claude-opus-5` | Used by Copilot/Agency. The `claude` provider picks its model per scenario and ignores this. |
 | `captureDenylist` | array of strings | `[]` | Case-insensitive substrings matched against the foreground app name and window title. A match **skips the whole capture tick** — no screenshot, no CLI call, no moment. |
 | `captureScope` | `fullScreen` \| `activeWindow` | `fullScreen` | `fullScreen` captures the whole primary display (rich multi-window context). `activeWindow` captures only the focused window's own pixels — nothing overlapping or behind it — which makes `captureDenylist` an exact guarantee at the cost of peripheral context. |
+| `scenarios` | object | (built-ins) | Choose the active scenario set per machine — disable built-ins and/or add your own. See [Scenarios](#scenarios) below. |
 
 Every field except `provider` has a default, so naming only the provider is a complete
-config.
+config. Configuration is read once at startup, so **restart Huddle** to pick up an edit.
+
+### Scenarios
+
+Scenarios are the things Huddle surfaces (Achievements, Learnings, LinkedIn posts,
+Efficiency insights). The optional `scenarios` section lets a machine run a different set
+— turn built-ins off and define your own — without a rebuild. Omit it and the four
+built-ins run as before.
+
+```jsonc
+"scenarios": {
+  "disabled": ["linkedin-posts"],   // built-in keys to turn off
+  "custom": [ /* your own scenarios, see fields below */ ]
+}
+```
+
+Built-in keys: `achievements`, `learnings`, `linkedin-posts`, `efficiency-insights`.
+
+A **custom scenario** needs only `key` and `systemPrompt`; everything else defaults:
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `key` | *(required)* | Unique id; must not collide with a built-in or another custom. |
+| `systemPrompt` | *(required)* | The prompt — describe **when to emit, when to stay silent, and the voice**. Do not describe the output JSON; that shape is enforced for you. |
+| `displayName` | `key` uppercased | The uppercase label on the nudge card. |
+| `accentColorHex` | `#6BA6FF` | Nudge-card accent. |
+| `cadenceHours` | `6` | How often it may run. |
+| `trailSize` | `60` | How many recent moments it sees. |
+| `priorNudgesSize` | `10` | How many of its own recent nudges it sees (for dedup). |
+| `model` | `sonnet` | Claude alias (`opus`/`sonnet`/`haiku`); ignored by Copilot/Agency, which use the top-level `model`. |
+| `effort` | *(none)* | `low`\|`medium`\|`high`\|`xhigh`\|`max` (Claude only). |
+| `webSearch` | `false` | Ground the answer in a live search where the provider supports it. |
+
+A custom entry that is invalid (missing `key`/`systemPrompt`, a colliding `key`, or an
+unrecognized `model`/`effort`) is skipped; the other scenarios still run.
+
+Every field at once, for reference (only `key` and `systemPrompt` are required — delete
+any other line to accept its default):
+
+```jsonc
+"scenarios": {
+  "disabled": ["linkedin-posts", "efficiency-insights"],
+  "custom": [
+    {
+      "key": "value-delivery",        // required — unique id, no collision with a built-in
+      "displayName": "VALUE-DELIVERY",// uppercase label on the nudge card (default: key uppercased)
+      "accentColorHex": "#6BA6FF",    // nudge-card accent
+      "cadenceHours": 6,              // how often it may run
+      "trailSize": 60,                // recent moments it sees
+      "priorNudgesSize": 10,          // its own recent nudges it sees (dedup)
+      "model": "opus",                // claude alias opus|sonnet|haiku (default sonnet); ignored by copilot/agency
+      "effort": "high",               // low|medium|high|xhigh|max (claude only); omit for none
+      "webSearch": false,             // ground in a live search where the provider supports it
+      "systemPrompt": "required — describe when to emit, when to stay silent, and the voice"
+    }
+  ]
+}
+```
 
 ### Examples
 
@@ -68,6 +126,33 @@ a security dashboard, anything showing PII or unreleased info). Avoid broad toke
 activeWindow` so a sensitive window that is merely *visible behind* your active one is
 also never captured — in `fullScreen` mode the denylist only skips a tick when the
 sensitive app is the **focused** window.
+
+Work laptop with a custom scenario — the above, plus turn off LinkedIn and add a
+**value-delivery** coach that watches your work and surfaces one higher-leverage move:
+
+```json
+{
+  "provider": "copilot",
+  "captureScope": "activeWindow",
+  "captureDenylist": ["Outlook", "Teams", "Windows Security", "1Password"],
+  "scenarios": {
+    "disabled": ["linkedin-posts"],
+    "custom": [
+      {
+        "key": "value-delivery",
+        "displayName": "VALUE",
+        "accentColorHex": "#E0A458",
+        "cadenceHours": 2,
+        "model": "opus",
+        "effort": "high",
+        "systemPrompt": "PLACEHOLDER — replace with your own. Watching the recent trail, surface ONE concrete, higher-leverage way to deliver or demonstrate value in the current work (turn a one-off into reuse, make impact visible to a stakeholder, unblock others), or return {\"emit\": false} with a reason. Second-person, specific, no fluff."
+      }
+    ]
+  }
+}
+```
+
+The `systemPrompt` here is a starter — tune it in place and restart; no rebuild needed.
 
 Default (no file) is equivalent to:
 

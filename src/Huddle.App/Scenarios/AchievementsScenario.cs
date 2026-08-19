@@ -16,7 +16,6 @@ namespace Huddle.Scenarios;
 internal sealed class AchievementsScenario : Scenario
 {
     public override string Key => "achievements";
-    public override string Name => "Achievements";
     public override string DisplayName => "ACHIEVEMENTS";
     public override string AccentColorHex => "#54D2A6";
     public override TimeSpan Cadence => TimeSpan.FromHours(1);

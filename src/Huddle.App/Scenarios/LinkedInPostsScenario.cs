@@ -15,7 +15,6 @@ namespace Huddle.Scenarios;
 internal sealed class LinkedInPostsScenario : Scenario
 {
     public override string Key => "linkedin-posts";
-    public override string Name => "LinkedIn posts";
     public override string DisplayName => "LINKEDIN POSTS";
     public override string AccentColorHex => "#C58BFF";
     public override TimeSpan Cadence => TimeSpan.FromHours(1);
