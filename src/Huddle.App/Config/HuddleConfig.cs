@@ -45,6 +45,13 @@ internal sealed class HuddleConfig
 
     public static HuddleConfig Current => s_cached ??= Load();
 
+    // The config is hand-edited, so tolerate comments and trailing commas.
+    private static readonly JsonDocumentOptions s_jsonOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
     private static HuddleConfig Load()
     {
         foreach (var path in ConfigFileCandidates())
@@ -52,7 +59,7 @@ internal sealed class HuddleConfig
             try
             {
                 if (!File.Exists(path)) continue;
-                using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                using var doc = JsonDocument.Parse(File.ReadAllText(path), s_jsonOptions);
                 var root = doc.RootElement;
 
                 CliProviderKind provider = root.TryGetProperty("provider", out var p)
@@ -131,6 +138,21 @@ internal sealed class HuddleConfig
             e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : fallback;
         double Dbl(string name, double fallback) =>
             e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : fallback;
+        // systemPrompt may be a single string or an array of lines (joined with \n
+        // into one prompt) so a long prompt can be written legibly across lines.
+        string StrOrLines(string name)
+        {
+            if (!e.TryGetProperty(name, out var v)) return "";
+            if (v.ValueKind == JsonValueKind.String) return v.GetString()!;
+            if (v.ValueKind == JsonValueKind.Array)
+            {
+                var lines = new List<string>();
+                foreach (var el in v.EnumerateArray())
+                    if (el.ValueKind == JsonValueKind.String) lines.Add(el.GetString()!);
+                return string.Join("\n", lines);
+            }
+            return "";
+        }
 
         string key = Str("key", "");
         return new CustomScenarioDef
@@ -145,7 +167,7 @@ internal sealed class HuddleConfig
             Effort = e.TryGetProperty("effort", out var ef) && ef.ValueKind == JsonValueKind.String ? ef.GetString() : null,
             WebSearch = e.TryGetProperty("webSearch", out var ws)
                 && (ws.ValueKind == JsonValueKind.True || ws.ValueKind == JsonValueKind.False) && ws.GetBoolean(),
-            SystemPrompt = Str("systemPrompt", ""),
+            SystemPrompt = StrOrLines("systemPrompt"),
         };
     }
 
