@@ -40,16 +40,34 @@ Minimal — run everything on Copilot with defaults:
 { "provider": "copilot" }
 ```
 
-Work laptop — Copilot, capture only the focused window, and never capture a few
-sensitive apps:
+Work laptop — Copilot, capture only the focused window, and never capture your
+confidential comms, credential prompts, or secure messaging:
 
 ```json
 {
   "provider": "copilot",
   "captureScope": "activeWindow",
-  "captureDenylist": ["1Password", "Bitwarden", "Banking"]
+  "captureDenylist": ["Outlook", "Teams", "Windows Security", "1Password", "Signal", "WhatsApp"]
 }
 ```
+
+Each entry is a case-insensitive substring matched against **both** the foreground
+app's process name and its window title, so short distinctive tokens work best:
+
+| Entry | Catches | Why exclude |
+| --- | --- | --- |
+| `Outlook` | `OUTLOOK.EXE` (classic), new Outlook (`olk.exe`) and Outlook-on-the-web by title | email — customer data, HR threads, confidential mail |
+| `Teams` | `ms-teams.exe` (new) and `Teams.exe` (classic), plus "… \| Microsoft Teams" titles | chats, calls, screen-shares, 1:1s |
+| `Windows Security` | the OS credential / sign-in dialog | passwords, smartcard PIN, MFA prompts |
+| `1Password` | your password manager (swap for whichever you use) | secrets vault |
+| `Signal`, `WhatsApp` | personal / secure messengers | private conversations |
+
+Add your org's internal tools by a distinctive title substring (an HR/payroll portal,
+a security dashboard, anything showing PII or unreleased info). Avoid broad tokens like
+`Mail` or `Sign in` that would over-skip. Pair the denylist with `captureScope:
+activeWindow` so a sensitive window that is merely *visible behind* your active one is
+also never captured — in `fullScreen` mode the denylist only skips a tick when the
+sensitive app is the **focused** window.
 
 Default (no file) is equivalent to:
 
