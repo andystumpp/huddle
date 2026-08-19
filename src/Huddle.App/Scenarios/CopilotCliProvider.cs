@@ -36,7 +36,7 @@ internal sealed class CopilotCliProvider : ICliProvider
     {
         // Copilot has no --system flag, so system + schema directive + user text are
         // one document. It exceeds the command-line limit for large trails, so it goes
-        // to a temp .md that Copilot reads via --allow-tool=read (Effort has no analogue).
+        // to a temp .md that Copilot reads via --allow-tool=read.
         string prompt = request.SystemPrompt
             + ScenarioPromptHelpers.BuildSchemaDirective(request.JsonSchema)
             + "\n\n"
@@ -58,6 +58,13 @@ internal sealed class CopilotCliProvider : ICliProvider
             psi.ArgumentList.Add("--allow-tool=read");
             psi.ArgumentList.Add("--add-dir");
             psi.ArgumentList.Add(tempDir);
+            if (request.Effort is { } effort)
+            {
+                // Copilot exposes the same reasoning-effort knob as Claude (--effort,
+                // levels low..max); our Effort enum is a subset it accepts.
+                psi.ArgumentList.Add("--effort");
+                psi.ArgumentList.Add(effort.ToString().ToLowerInvariant());
+            }
             if (request.WebSearch)
             {
                 // Narrow url grant (fetch), never --allow-all-tools. Whether Copilot's

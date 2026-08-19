@@ -61,7 +61,7 @@ A **custom scenario** needs only `key` and `systemPrompt`; everything else defau
 | `trailSize` | `60` | How many recent moments it sees. |
 | `priorNudgesSize` | `10` | How many of its own recent nudges it sees (for dedup). |
 | `model` | `sonnet` | Claude alias (`opus`/`sonnet`/`haiku`); ignored by Copilot/Agency, which use the top-level `model`. |
-| `effort` | *(none)* | `low`\|`medium`\|`high`\|`xhigh`\|`max` (Claude only). |
+| `effort` | *(none)* | `low`\|`medium`\|`high`\|`xhigh`\|`max`. Reasoning effort, applied on both Claude (`--effort`) and Copilot/Agency (`--effort`). |
 | `webSearch` | `false` | Ground the answer in a live search where the provider supports it. |
 
 A custom entry that is invalid (missing `key`/`systemPrompt`, a colliding `key`, or an
@@ -98,7 +98,7 @@ any other line to accept its default):
       "trailSize": 60,                // recent moments it sees
       "priorNudgesSize": 10,          // its own recent nudges it sees (dedup)
       "model": "opus",                // claude alias opus|sonnet|haiku (default sonnet); ignored by copilot/agency
-      "effort": "high",               // low|medium|high|xhigh|max (claude only); omit for none
+      "effort": "high",               // low|medium|high|xhigh|max (claude + copilot); omit for none
       "webSearch": false,             // ground in a live search where the provider supports it
       "systemPrompt": "required — describe when to emit, when to stay silent, and the voice"
     }
