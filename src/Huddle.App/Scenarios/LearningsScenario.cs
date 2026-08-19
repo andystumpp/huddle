@@ -18,7 +18,6 @@ namespace Huddle.Scenarios;
 internal sealed class LearningsScenario : Scenario
 {
     public override string Key => "learnings";
-    public override string Name => "Learnings";
     public override string DisplayName => "LEARNINGS";
     public override string AccentColorHex => "#F5C56C";
     public override TimeSpan Cadence => TimeSpan.FromHours(24);

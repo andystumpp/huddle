@@ -21,7 +21,6 @@ namespace Huddle.Scenarios;
 internal sealed class EfficiencyInsightsScenario : Scenario
 {
     public override string Key => "efficiency-insights";
-    public override string Name => "Efficiency insights";
     public override string DisplayName => "EFFICIENCY";
     public override string AccentColorHex => "#6BA6FF";
     public override TimeSpan Cadence => TimeSpan.FromHours(6);

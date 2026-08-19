@@ -35,6 +35,12 @@ internal sealed class HuddleConfig
     /// </summary>
     public bool CaptureActiveWindowOnly { get; init; }
 
+    /// <summary>
+    /// The active scenario set: which built-ins to disable and which custom scenarios to
+    /// add. Empty by default (built-ins run unchanged). Config key <c>scenarios</c>.
+    /// </summary>
+    public ScenarioConfig Scenarios { get; init; } = new();
+
     private static HuddleConfig? s_cached;
 
     public static HuddleConfig Current => s_cached ??= Load();
@@ -80,6 +86,7 @@ internal sealed class HuddleConfig
                     Model = model,
                     CaptureDenylist = denylist,
                     CaptureActiveWindowOnly = activeWindowOnly,
+                    Scenarios = ParseScenarios(root),
                 };
             }
             catch { /* malformed config — fall through to the default */ }
@@ -93,6 +100,54 @@ internal sealed class HuddleConfig
         "agency" => CliProviderKind.Agency,
         _ => CliProviderKind.Claude,
     };
+
+    private static ScenarioConfig ParseScenarios(JsonElement root)
+    {
+        if (!root.TryGetProperty("scenarios", out var s) || s.ValueKind != JsonValueKind.Object)
+            return new ScenarioConfig();
+
+        var disabled = new List<string>();
+        if (s.TryGetProperty("disabled", out var d) && d.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var e in d.EnumerateArray())
+                if (e.ValueKind == JsonValueKind.String) disabled.Add(e.GetString()!);
+        }
+
+        var custom = new List<CustomScenarioDef>();
+        if (s.TryGetProperty("custom", out var c) && c.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var e in c.EnumerateArray())
+                if (e.ValueKind == JsonValueKind.Object) custom.Add(ParseCustomScenario(e));
+        }
+
+        return new ScenarioConfig { Disabled = disabled, Custom = custom };
+    }
+
+    private static CustomScenarioDef ParseCustomScenario(JsonElement e)
+    {
+        string Str(string name, string fallback) =>
+            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : fallback;
+        int Int(string name, int fallback) =>
+            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : fallback;
+        double Dbl(string name, double fallback) =>
+            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : fallback;
+
+        string key = Str("key", "");
+        return new CustomScenarioDef
+        {
+            Key = key,
+            DisplayName = Str("displayName", key.ToUpperInvariant()),
+            AccentColorHex = Str("accentColorHex", "#6BA6FF"),
+            CadenceHours = Dbl("cadenceHours", 6),
+            TrailSize = Int("trailSize", 60),
+            PriorNudgesSize = Int("priorNudgesSize", 10),
+            Model = Str("model", "sonnet"),
+            Effort = e.TryGetProperty("effort", out var ef) && ef.ValueKind == JsonValueKind.String ? ef.GetString() : null,
+            WebSearch = e.TryGetProperty("webSearch", out var ws)
+                && (ws.ValueKind == JsonValueKind.True || ws.ValueKind == JsonValueKind.False) && ws.GetBoolean(),
+            SystemPrompt = Str("systemPrompt", ""),
+        };
+    }
 
     private static string DefaultCommand(CliProviderKind p) => p switch
     {
