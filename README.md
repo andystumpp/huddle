@@ -28,6 +28,7 @@ through its own login.
 | `model` | model name | `claude-opus-5` | Used by Copilot/Agency. The `claude` provider picks its model per scenario and ignores this. |
 | `captureDenylist` | array of strings | `[]` | Case-insensitive substrings matched against the foreground app name and window title. A match **skips the whole capture tick** — no screenshot, no CLI call, no moment. |
 | `captureScope` | `fullScreen` \| `activeWindow` | `fullScreen` | `fullScreen` captures the whole primary display (rich multi-window context). `activeWindow` captures only the focused window's own pixels — nothing overlapping or behind it — which makes `captureDenylist` an exact guarantee at the cost of peripheral context. |
+| `skipSensitiveMoments` | `true` \| `false` | `true` | When the vision model flags a frame as sensitive (compensation, health, credentials, PII), the tick stores **nothing**. Summaries never contain sensitive values regardless; this additionally drops the whole moment. Set `false` to keep the value-free summary for sensitive frames. |
 | `scenarios` | object | (built-ins) | Choose the active scenario set per machine — disable built-ins and/or add your own. See [Scenarios](#scenarios) below. |
 
 Every field except `provider` has a default, so naming only the provider is a complete
@@ -183,3 +184,11 @@ Default (no file) is equivalent to:
   summary is stored — never the image.
 - **Denylist.** See `captureDenylist` above. Pair it with `captureScope: activeWindow`
   to guarantee a sensitive foreground window is never sent.
+- **Sensitive content.** Summaries never contain specific sensitive values — salaries,
+  account/card numbers, passwords, medical values, or personal identifiers — the vision
+  model describes the *kind* of thing, not the values. And by default
+  (`skipSensitiveMoments: true`) a frame the model flags as sensitive is dropped entirely,
+  storing no moment. Because scenarios read stored moments, this keeps sensitive content
+  out of nudges, posts, and MCP queries too. This complements the denylist: the denylist
+  catches known windows *before* capture; this catches sensitive *content* the denylist
+  can't know about.

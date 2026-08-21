@@ -379,14 +379,23 @@ public sealed partial class PeekPanelWindow : Window
             }
 
             byte[] jpeg = await ScreenCapture.CaptureAsJpegAsync(HuddleConfig.Current.CaptureActiveWindowOnly);
-            string summary = await MomentExtractor.ExtractAsync(jpeg, foreground, recent);
+            var vision = await MomentExtractor.ExtractAsync(jpeg, foreground, recent);
+
+            // Sensitive-content guard: the summary is always value-free, but when the
+            // frame showed sensitive content and this machine opts to skip (default on),
+            // store nothing at all for this tick.
+            if (vision.Sensitive && HuddleConfig.Current.SkipSensitiveMoments)
+            {
+                Debug.WriteLine("[Huddle] capture skipped (sensitive content)");
+                return;
+            }
 
             var moment = new Moment(
                 UlidGenerator.Generate(),
                 DateTimeOffset.UtcNow,
                 foreground.App,
                 foreground.WindowTitle,
-                summary);
+                vision.Summary);
 
             await MomentStore.AddAsync(moment);
 
