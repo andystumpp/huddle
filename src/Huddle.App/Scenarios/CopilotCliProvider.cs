@@ -53,7 +53,7 @@ internal sealed class CopilotCliProvider : ICliProvider
             psi.ArgumentList.Add($"Read the file at {tempFile} and follow its instructions. Output only what it asks for, nothing else.");
             psi.ArgumentList.Add("-s");
             psi.ArgumentList.Add("--model");
-            psi.ArgumentList.Add(_model);
+            psi.ArgumentList.Add(EffectiveModel(request.Model));
             psi.ArgumentList.Add("--no-ask-user");
             psi.ArgumentList.Add("--allow-tool=read");
             psi.ArgumentList.Add("--add-dir");
@@ -84,6 +84,21 @@ internal sealed class CopilotCliProvider : ICliProvider
         {
             try { File.Delete(tempFile); } catch { /* best effort */ }
         }
+    }
+
+    /// <summary>
+    /// The Copilot model for a scenario. Model names are provider-relative: a scenario's
+    /// own <c>model</c> is used as-is when it is a Copilot-native name (e.g.
+    /// <c>claude-opus-5</c>, <c>gpt-5</c>), giving per-scenario model control on Copilot.
+    /// Bare Claude aliases (<c>opus</c>/<c>sonnet</c>/<c>haiku</c>) — which the built-in
+    /// scenarios and the config default use — are not Copilot model names (Copilot rejects
+    /// them), so those fall back to the configured top-level model.
+    /// </summary>
+    private string EffectiveModel(string scenarioModel)
+    {
+        string m = (scenarioModel ?? string.Empty).Trim();
+        if (m.Length == 0) return _model;
+        return m.ToLowerInvariant() is "opus" or "sonnet" or "haiku" ? _model : m;
     }
 
     public async Task<string?> DescribeImageAsync(string imagePath, string prompt, CancellationToken ct)
