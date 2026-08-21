@@ -25,7 +25,7 @@ through its own login.
 | --- | --- | --- | --- |
 | `provider` | `claude` \| `copilot` \| `agency` | `claude` | Which local CLI handles vision **and** scenarios. |
 | `command` | executable name/path | the provider's binary (`claude` / `copilot` / `agency`) | Override if the CLI isn't on `PATH` under its usual name. |
-| `model` | model name | `claude-opus-5` | Used by Copilot/Agency. The `claude` provider picks its model per scenario and ignores this. |
+| `model` | model name | `claude-opus-5` | The **default** model for Copilot/Agency (a scenario's own Copilot-native `model` overrides it per-scenario; see [Scenarios](#scenarios)). The `claude` provider picks its model per scenario and ignores this. |
 | `captureDenylist` | array of strings | `[]` | Case-insensitive substrings matched against the foreground app name and window title. A match **skips the whole capture tick** — no screenshot, no CLI call, no moment. |
 | `captureScope` | `fullScreen` \| `activeWindow` | `fullScreen` | `fullScreen` captures the whole primary display (rich multi-window context). `activeWindow` captures only the focused window's own pixels — nothing overlapping or behind it — which makes `captureDenylist` an exact guarantee at the cost of peripheral context. |
 | `skipSensitiveMoments` | `true` \| `false` | `true` | When the vision model flags a frame as sensitive (compensation, health, credentials, PII), the tick stores **nothing**. Summaries never contain sensitive values regardless; this additionally drops the whole moment. Set `false` to keep the value-free summary for sensitive frames. |
@@ -61,7 +61,7 @@ A **custom scenario** needs only `key` and `systemPrompt`; everything else defau
 | `cadenceHours` | `6` | How often it may run. |
 | `trailSize` | `60` | How many recent moments it sees. |
 | `priorNudgesSize` | `10` | How many of its own recent nudges it sees (for dedup). |
-| `model` | `sonnet` | Claude alias (`opus`/`sonnet`/`haiku`); ignored by Copilot/Agency, which use the top-level `model`. |
+| `model` | `sonnet` | **Provider-relative.** On `claude`: an alias (`opus`/`sonnet`/`haiku`). On `copilot`/`agency`: a Copilot model name (e.g. `claude-opus-5`) is used per-scenario as-is; a *bare* Claude alias (`opus`/`sonnet`/`haiku`, incl. the default) isn't a Copilot name, so it falls back to the top-level `model`. |
 | `effort` | *(none)* | `low`\|`medium`\|`high`\|`xhigh`\|`max`. Reasoning effort, applied on both Claude (`--effort`) and Copilot/Agency (`--effort`). |
 | `webSearch` | `false` | Ground the answer in a live search where the provider supports it. |
 
