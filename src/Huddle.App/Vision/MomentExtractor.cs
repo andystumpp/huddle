@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
+using System.Text.Json;
 using Huddle.Capture;
 using Huddle.Models;
 using Huddle.Scenarios;
@@ -11,10 +12,16 @@ using Huddle.Scenarios;
 namespace Huddle.Vision;
 
 /// <summary>
+/// The result of one vision call: the intent summary (always free of sensitive values)
+/// plus whether the frame showed sensitive content.
+/// </summary>
+internal readonly record struct MomentVision(string Summary, bool Sensitive);
+
+/// <summary>
 /// Sends a captured frame + foreground context to the configured CLI provider and
-/// returns the 1-2 sentence moment summary it produces. The screenshot is written to
-/// a temporary file for the CLI to attach and deleted immediately after the call —
-/// only the summary text is ever persisted.
+/// returns the 1-2 sentence moment summary plus a sensitivity flag. The screenshot is
+/// written to a temporary file for the CLI to attach and deleted immediately after the
+/// call — only the summary text is ever persisted (and only when policy allows).
 /// </summary>
 internal static class MomentExtractor
 {
@@ -23,7 +30,7 @@ internal static class MomentExtractor
         at (their active window, or their full screen), the foreground app and window title,
         and brief summaries of the user's recent moments (prior captures, newest first).
 
-        In a single 1-2 sentence response, infer what the user is currently trying to
+        In a 1-2 sentence summary, infer what the user is currently trying to
         accomplish. Read the trail of recent moments for trajectory — what they've been
         doing the last several minutes tells you more about purpose than the one frame
         does.
@@ -37,14 +44,27 @@ internal static class MomentExtractor
         - If nothing intentional seems to be happening (idle, browsing, between tasks), say
           so plainly — a single hedged sentence is fine.
 
-        Frame the response as intent ("you're trying to X" / "you're verifying X" / "you're
+        Frame the summary as intent ("you're trying to X" / "you're verifying X" / "you're
         likely shipping X") rather than description ("you're looking at X"). Do not propose
         what to do about it. Do not greet, summarize, or meta-comment.
+
+        Sensitive content:
+        - NEVER write specific sensitive values in the summary — no salaries, pay, bonuses,
+          dollar amounts, account or card numbers, passwords, API keys, medical values or
+          results, or personal identifiers (SSN, date of birth, home address). Describe the
+          KIND of thing ("a compensation letter", "a bank statement", "a health portal"),
+          never the values themselves.
+        - Judge whether the frame shows sensitive personal, financial, health, credential,
+          or PII content. When it does — or when you are unsure — mark it sensitive.
+
+        Reply with ONLY a JSON object and nothing else (no prose, no markdown, no code
+        fences):
+        {"summary": "<the 1-2 sentence intent summary>", "sensitive": true or false}
         """;
 
     private static readonly ICliProvider s_provider = CliProviderFactory.Resolve();
 
-    public static async Task<string> ExtractAsync(
+    public static async Task<MomentVision> ExtractAsync(
         byte[] jpegBytes,
         ForegroundInfo foreground,
         IReadOnlyList<Moment> recent,
@@ -68,7 +88,7 @@ internal static class MomentExtractor
             {
                 throw new VisionCallException("CLI returned no summary text.");
             }
-            return text.Trim();
+            return ParseVision(text);
         }
         catch (VisionCallException)
         {
@@ -82,6 +102,43 @@ internal static class MomentExtractor
         {
             try { File.Delete(tempPath); } catch { /* best effort */ }
         }
+    }
+
+    /// <summary>
+    /// Parse the model's JSON reply into a <see cref="MomentVision"/>. Isolates the first
+    /// balanced JSON object (in case of stray prose) and reads <c>summary</c>/<c>sensitive</c>.
+    /// If the reply is not JSON, the whole text is taken as the summary and treated as
+    /// non-sensitive — the "never write values" prompt rule still protected that text.
+    /// </summary>
+    private static MomentVision ParseVision(string text)
+    {
+        string trimmed = text.Trim();
+        int start = trimmed.IndexOf('{');
+        int end = trimmed.LastIndexOf('}');
+        if (start >= 0 && end > start)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed.Substring(start, end - start + 1));
+                var root = doc.RootElement;
+                string? summary = root.TryGetProperty("summary", out var s) && s.ValueKind == JsonValueKind.String
+                    ? s.GetString()
+                    : null;
+                bool sensitive = false;
+                if (root.TryGetProperty("sensitive", out var v))
+                {
+                    sensitive = v.ValueKind == JsonValueKind.True
+                        || (v.ValueKind == JsonValueKind.String && bool.TryParse(v.GetString(), out var b) && b);
+                }
+                if (!string.IsNullOrWhiteSpace(summary))
+                {
+                    return new MomentVision(summary.Trim(), sensitive);
+                }
+            }
+            catch (JsonException) { /* fall through to raw-text fallback */ }
+        }
+        // Not JSON (or no summary field) — keep the moment, treat as non-sensitive.
+        return new MomentVision(trimmed, false);
     }
 
     /// <summary>

@@ -41,6 +41,14 @@ internal sealed class HuddleConfig
     /// </summary>
     public ScenarioConfig Scenarios { get; init; } = new();
 
+    /// <summary>
+    /// When true (the default), a capture tick whose frame the vision model flags as
+    /// sensitive stores nothing. Summaries never contain sensitive values regardless;
+    /// this additionally drops the moment. Set config key <c>skipSensitiveMoments</c> to
+    /// <c>false</c> to keep the (value-free) summary for sensitive frames.
+    /// </summary>
+    public bool SkipSensitiveMoments { get; init; } = true;
+
     private static HuddleConfig? s_cached;
 
     public static HuddleConfig Current => s_cached ??= Load();
@@ -86,6 +94,10 @@ internal sealed class HuddleConfig
                 bool activeWindowOnly = root.TryGetProperty("captureScope", out var s) && s.ValueKind == JsonValueKind.String
                     && s.GetString()!.Trim().ToLowerInvariant() is "activewindow" or "active" or "window";
 
+                // Default true: only an explicit `false` keeps sensitive moments.
+                bool skipSensitive = !(root.TryGetProperty("skipSensitiveMoments", out var sk)
+                    && sk.ValueKind == JsonValueKind.False);
+
                 return new HuddleConfig
                 {
                     Provider = provider,
@@ -93,6 +105,7 @@ internal sealed class HuddleConfig
                     Model = model,
                     CaptureDenylist = denylist,
                     CaptureActiveWindowOnly = activeWindowOnly,
+                    SkipSensitiveMoments = skipSensitive,
                     Scenarios = ParseScenarios(root),
                 };
             }
