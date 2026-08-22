@@ -36,25 +36,23 @@ config. Configuration is read once at startup, so **restart Huddle** to pick up 
 
 ### Scenarios
 
-Scenarios are the things Huddle surfaces (Achievements, Learnings, LinkedIn posts,
-Efficiency insights). The optional `scenarios` section lets a machine run a different set
-— turn built-ins off and define your own — without a rebuild. Omit it and the four
-built-ins run as before.
+Scenarios are the things Huddle surfaces — Achievements, Learnings, LinkedIn posts,
+Efficiency insights, or your own. They are defined **entirely** in the `scenarios` array
+of `huddle.config.json`; there are no scenarios baked into the app. **With no `scenarios`
+configured, Huddle produces no nudges** (it still captures moments).
 
-```jsonc
-"scenarios": {
-  "disabled": ["linkedin-posts"],   // built-in keys to turn off
-  "custom": [ /* your own scenarios, see fields below */ ]
-}
-```
+The repo ships [`huddle.config.example.json`](huddle.config.example.json) with the four
+default scenarios spelled out. To start, copy it to your config location and rename it to
+`huddle.config.json` (e.g. `%LOCALAPPDATA%\Huddle\huddle.config.json`), then tune it — edit
+a prompt, change a cadence, drop a scenario, add your own — by hand or by pointing an agent
+at the file (*"read my huddle.config.json, drop linkedin, add a value-delivery scenario
+tuned for internal impact reviews"*).
 
-Built-in keys: `achievements`, `learnings`, `linkedin-posts`, `efficiency-insights`.
-
-A **custom scenario** needs only `key` and `systemPrompt`; everything else defaults:
+Each scenario in the array needs only `key` and `systemPrompt`; everything else defaults:
 
 | Field | Default | Notes |
 | --- | --- | --- |
-| `key` | *(required)* | Unique id; must not collide with a built-in or another custom. |
+| `key` | *(required)* | Unique id (must not repeat another scenario's key). |
 | `systemPrompt` | *(required)* | The prompt — describe **when to emit, when to stay silent, and the voice**. Do not describe the output JSON; that shape is enforced for you. May be a **string, or an array of lines** joined with newlines into one prompt (see below). |
 | `displayName` | `key` uppercased | The uppercase label on the nudge card. |
 | `accentColorHex` | `#6BA6FF` | Nudge-card accent. |
@@ -65,8 +63,8 @@ A **custom scenario** needs only `key` and `systemPrompt`; everything else defau
 | `effort` | *(none)* | `low`\|`medium`\|`high`\|`xhigh`\|`max`. Reasoning effort, applied on both Claude (`--effort`) and Copilot/Agency (`--effort`). |
 | `webSearch` | `false` | Ground the answer in a live search where the provider supports it. |
 
-A custom entry that is invalid (missing `key`/`systemPrompt`, a colliding `key`, or an
-unrecognized `model`/`effort`) is skipped; the other scenarios still run.
+A scenario that is invalid (missing `key`/`systemPrompt`, a duplicate `key`, or an
+unrecognized `model`/`effort`) is skipped; the others still run.
 
 **Writing a long prompt.** JSON strings can't hold line breaks, so a long `systemPrompt`
 can instead be an **array of lines** — each element is one line, and they are joined with
@@ -88,28 +86,26 @@ Every field at once, for reference (only `key` and `systemPrompt` are required �
 any other line to accept its default):
 
 ```jsonc
-"scenarios": {
-  "disabled": ["linkedin-posts", "efficiency-insights"],
-  "custom": [
-    {
-      "key": "value-delivery",        // required — unique id, no collision with a built-in
-      "displayName": "VALUE-DELIVERY",// uppercase label on the nudge card (default: key uppercased)
-      "accentColorHex": "#6BA6FF",    // nudge-card accent
-      "cadenceHours": 6,              // how often it may run
-      "trailSize": 60,                // recent moments it sees
-      "priorNudgesSize": 10,          // its own recent nudges it sees (dedup)
-      "model": "opus",                // claude alias opus|sonnet|haiku (default sonnet); ignored by copilot/agency
-      "effort": "high",               // low|medium|high|xhigh|max (claude + copilot); omit for none
-      "webSearch": false,             // ground in a live search where the provider supports it
-      "systemPrompt": "required — describe when to emit, when to stay silent, and the voice"
-    }
-  ]
-}
+"scenarios": [
+  {
+    "key": "value-delivery",        // required — unique id
+    "displayName": "VALUE-DELIVERY",// uppercase label on the nudge card (default: key uppercased)
+    "accentColorHex": "#6BA6FF",    // nudge-card accent
+    "cadenceHours": 6,              // how often it may run
+    "trailSize": 60,                // recent moments it sees
+    "priorNudgesSize": 10,          // its own recent nudges it sees (dedup)
+    "model": "opus",                // provider-relative (see the model row above)
+    "effort": "high",               // low|medium|high|xhigh|max; omit for none
+    "webSearch": false,             // ground in a live search where the provider supports it
+    "systemPrompt": "required — describe when to emit, when to stay silent, and the voice"
+  }
+]
 ```
 
 ### Examples
 
-Minimal — run everything on Copilot with defaults:
+Minimal provider selection — captures moments on Copilot; add a `scenarios` array (or copy
+the example config) to get nudges:
 
 ```json
 { "provider": "copilot" }
@@ -144,38 +140,43 @@ activeWindow` so a sensitive window that is merely *visible behind* your active 
 also never captured — in `fullScreen` mode the denylist only skips a tick when the
 sensitive app is the **focused** window.
 
-Work laptop with a custom scenario — the above, plus turn off LinkedIn and add a
-**value-delivery** coach that watches your work and surfaces one higher-leverage move:
+Work laptop — copy `huddle.config.example.json`, keep the scenarios you want, and add your
+own. `scenarios` is an array, so dropping LinkedIn/Efficiency is just leaving them out:
 
-```json
+```jsonc
 {
   "provider": "copilot",
   "captureScope": "activeWindow",
   "captureDenylist": ["Outlook", "Teams", "Windows Security", "1Password"],
-  "scenarios": {
-    "disabled": ["linkedin-posts"],
-    "custom": [
-      {
-        "key": "value-delivery",
-        "displayName": "VALUE",
-        "accentColorHex": "#E0A458",
-        "cadenceHours": 2,
-        "model": "opus",
-        "effort": "high",
-        "systemPrompt": "PLACEHOLDER — replace with your own. Watching the recent trail, surface ONE concrete, higher-leverage way to deliver or demonstrate value in the current work (turn a one-off into reuse, make impact visible to a stakeholder, unblock others), or return {\"emit\": false} with a reason. Second-person, specific, no fluff."
-      }
-    ]
-  }
+  "scenarios": [
+    // … keep achievements + learnings from the example, then add: …
+    {
+      "key": "value-delivery",
+      "displayName": "VALUE",
+      "accentColorHex": "#E0A458",
+      "cadenceHours": 2,
+      "model": "opus",
+      "effort": "high",
+      "systemPrompt": [
+        "PLACEHOLDER — replace with your own.",
+        "Watching the recent trail, surface ONE concrete, higher-leverage move to",
+        "deliver or demonstrate value, or return {\"emit\": false} with a reason."
+      ]
+    }
+  ]
 }
 ```
 
-The `systemPrompt` here is a starter — tune it in place and restart; no rebuild needed.
+Tune it in place and restart; no rebuild needed.
 
-Default (no file) is equivalent to:
+With no config file, the non-scenario settings default to:
 
 ```json
 { "provider": "claude", "captureScope": "fullScreen", "captureDenylist": [] }
 ```
+
+…and with no `scenarios`, no nudges are produced — copy `huddle.config.example.json` to get
+the defaults.
 
 ## Safeguards
 

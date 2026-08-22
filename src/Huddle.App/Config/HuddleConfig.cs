@@ -36,10 +36,11 @@ internal sealed class HuddleConfig
     public bool CaptureActiveWindowOnly { get; init; }
 
     /// <summary>
-    /// The active scenario set: which built-ins to disable and which custom scenarios to
-    /// add. Empty by default (built-ins run unchanged). Config key <c>scenarios</c>.
+    /// The scenarios to run, defined entirely in the <c>scenarios</c> array of the config.
+    /// Empty by default — with no scenarios configured, no nudges are produced (moments are
+    /// still captured). See <c>huddle.config.example.json</c> for the default scenarios.
     /// </summary>
-    public ScenarioConfig Scenarios { get; init; } = new();
+    public IReadOnlyList<ScenarioDef> Scenarios { get; init; } = Array.Empty<ScenarioDef>();
 
     /// <summary>
     /// When true (the default), a capture tick whose frame the vision model flags as
@@ -121,29 +122,18 @@ internal sealed class HuddleConfig
         _ => CliProviderKind.Claude,
     };
 
-    private static ScenarioConfig ParseScenarios(JsonElement root)
+    private static IReadOnlyList<ScenarioDef> ParseScenarios(JsonElement root)
     {
-        if (!root.TryGetProperty("scenarios", out var s) || s.ValueKind != JsonValueKind.Object)
-            return new ScenarioConfig();
-
-        var disabled = new List<string>();
-        if (s.TryGetProperty("disabled", out var d) && d.ValueKind == JsonValueKind.Array)
+        var scenarios = new List<ScenarioDef>();
+        if (root.TryGetProperty("scenarios", out var s) && s.ValueKind == JsonValueKind.Array)
         {
-            foreach (var e in d.EnumerateArray())
-                if (e.ValueKind == JsonValueKind.String) disabled.Add(e.GetString()!);
+            foreach (var e in s.EnumerateArray())
+                if (e.ValueKind == JsonValueKind.Object) scenarios.Add(ParseScenario(e));
         }
-
-        var custom = new List<CustomScenarioDef>();
-        if (s.TryGetProperty("custom", out var c) && c.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var e in c.EnumerateArray())
-                if (e.ValueKind == JsonValueKind.Object) custom.Add(ParseCustomScenario(e));
-        }
-
-        return new ScenarioConfig { Disabled = disabled, Custom = custom };
+        return scenarios;
     }
 
-    private static CustomScenarioDef ParseCustomScenario(JsonElement e)
+    private static ScenarioDef ParseScenario(JsonElement e)
     {
         string Str(string name, string fallback) =>
             e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : fallback;
@@ -168,7 +158,7 @@ internal sealed class HuddleConfig
         }
 
         string key = Str("key", "");
-        return new CustomScenarioDef
+        return new ScenarioDef
         {
             Key = key,
             DisplayName = Str("displayName", key.ToUpperInvariant()),

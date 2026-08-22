@@ -1,28 +1,13 @@
-using System;
-using System.Collections.Generic;
-
 namespace Huddle.Config;
 
 /// <summary>
-/// The optional <c>scenarios</c> section of <c>huddle.config.json</c>: which built-in
-/// scenarios to turn off on this machine, and any custom scenarios to add. Both default
-/// empty, so omitting the section leaves the built-in set unchanged.
+/// One scenario, defined in the <c>scenarios</c> array of <c>huddle.config.json</c>.
+/// Only <see cref="Key"/> and <see cref="SystemPrompt"/> are required; every other field
+/// defaults. <see cref="Effort"/> is kept as the raw string and validated/parsed where the
+/// scenario set is composed. There are no built-in scenarios — the config array is the
+/// full set (see <c>huddle.config.example.json</c> for the defaults).
 /// </summary>
-internal sealed class ScenarioConfig
-{
-    /// <summary>Built-in scenario keys to remove (e.g. <c>linkedin-posts</c>).</summary>
-    public IReadOnlyList<string> Disabled { get; init; } = Array.Empty<string>();
-
-    /// <summary>Custom scenarios defined inline.</summary>
-    public IReadOnlyList<CustomScenarioDef> Custom { get; init; } = Array.Empty<CustomScenarioDef>();
-}
-
-/// <summary>
-/// One config-authored scenario. Only <see cref="Key"/> and <see cref="SystemPrompt"/>
-/// are required; every other field defaults. <see cref="Effort"/> is kept as the raw
-/// string and validated/parsed where the scenario set is composed.
-/// </summary>
-internal sealed class CustomScenarioDef
+internal sealed class ScenarioDef
 {
     public string Key { get; init; } = "";
     public string DisplayName { get; init; } = "";

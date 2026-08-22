@@ -10,7 +10,7 @@ using Huddle.Models;
 namespace Huddle.Scenarios;
 
 /// <summary>
-/// A scenario whose metadata and prompt come from a <see cref="CustomScenarioDef"/> in
+/// A scenario whose metadata and prompt come from a <see cref="ScenarioDef"/> in
 /// <c>huddle.config.json</c> rather than code. It runs the same trail → completion →
 /// <see cref="NudgeDraft"/> pipeline as the built-in trail scenarios; the only difference
 /// is that its system prompt is authored in config. The pipeline still enforces the
@@ -18,10 +18,10 @@ namespace Huddle.Scenarios;
 /// </summary>
 internal sealed class ConfiguredScenario : Scenario
 {
-    private readonly CustomScenarioDef _def;
+    private readonly ScenarioDef _def;
     private readonly Effort? _effort;
 
-    public ConfiguredScenario(CustomScenarioDef def, Effort? effort)
+    public ConfiguredScenario(ScenarioDef def, Effort? effort)
     {
         _def = def;
         _effort = effort;
