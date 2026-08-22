@@ -490,12 +490,10 @@
                               HorizontalScrollBarVisibility="Hidden"
                               VerticalScrollMode="Disabled"
                               Padding="14,0,14,8">
+                    <!-- The "All" chip is fixed; a chip per configured scenario is added in
+                         code from ScenarioRegistry (see BuildFilterChips). -->
                     <StackPanel x:Name="FilterChips" Orientation="Horizontal" Spacing="6">
-                        <ToggleButton Tag="" Content="All" IsChecked="True" Click="OnFilterChipClick" Style="{StaticResource FilterChipStyle}"/>
-                        <ToggleButton Tag="achievements" Content="Achievements" Click="OnFilterChipClick" Style="{StaticResource FilterChipStyle}"/>
-                        <ToggleButton Tag="learnings" Content="Learnings" Click="OnFilterChipClick" Style="{StaticResource FilterChipStyle}"/>
-                        <ToggleButton Tag="linkedin-posts" Content="Posts" Click="OnFilterChipClick" Style="{StaticResource FilterChipStyle}"/>
-                        <ToggleButton Tag="efficiency-insights" Content="Efficiency" Click="OnFilterChipClick" Style="{StaticResource FilterChipStyle}"/>
+                        <ToggleButton x:Name="AllFilterChip" Tag="" Content="All" IsChecked="True" Click="OnFilterChipClick" Style="{StaticResource FilterChipStyle}"/>
                     </StackPanel>
                 </ScrollViewer>
 

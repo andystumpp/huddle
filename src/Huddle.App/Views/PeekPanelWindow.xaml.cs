@@ -128,6 +128,9 @@ public sealed partial class PeekPanelWindow : Window
         MomentsRepeater.ItemsSource = _moments;
         NudgesRepeater.ItemsSource = _nudgeDisplay;
 
+        // Scenario filter pills come from the configured scenarios, not a fixed list.
+        BuildFilterChips();
+
         try
         {
             await Database.InitializeAsync();
@@ -492,6 +495,31 @@ public sealed partial class PeekPanelWindow : Window
         if (day == today) return "TODAY";
         if (day == today.AddDays(-1)) return "YESTERDAY";
         return day.ToString("ddd · MMM d").ToUpperInvariant();
+    }
+
+    /// <summary>
+    /// Populate the scenario filter pills from <see cref="ScenarioRegistry.All"/> so they
+    /// always match the configured scenarios. The "All" chip is fixed in XAML; one chip per
+    /// scenario is added after it (reusing the All chip's style), labelled with the
+    /// scenario's natural-case <c>DisplayName</c>.
+    /// </summary>
+    private void BuildFilterChips()
+    {
+        // Drop any previously-added scenario chips; keep the leading "All" chip.
+        while (FilterChips.Children.Count > 1) FilterChips.Children.RemoveAt(1);
+
+        var style = AllFilterChip.Style;
+        foreach (var scenario in ScenarioRegistry.All)
+        {
+            var chip = new ToggleButton
+            {
+                Tag = scenario.Key,
+                Content = scenario.DisplayName,
+                Style = style,
+            };
+            chip.Click += OnFilterChipClick;
+            FilterChips.Children.Add(chip);
+        }
     }
 
     private void OnFilterChipClick(object sender, RoutedEventArgs e)
