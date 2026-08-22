@@ -95,3 +95,17 @@ The repository SHALL include a committed `huddle.config.example.json` that provi
 
 - **WHEN** `huddle.config.example.json` is copied to `huddle.config.json` unchanged
 - **THEN** the four former built-in scenarios run with the same prompts, cadences, models, and settings as before this change
+
+### Requirement: Scenario display is derived from the configured scenarios
+
+The scenario filter pills and each nudge card's scenario label SHALL be derived from the configured scenarios, not a fixed list. The filter pills SHALL be a leading "All" pill plus one pill per configured scenario, labelled by its `displayName`. A scenario's `displayName` SHALL be stored in natural case; it SHALL be shown as-is on the filter pill and uppercased on the nudge card tag.
+
+#### Scenario: Filter pills match the configured scenarios
+
+- **WHEN** the scenario set is configured
+- **THEN** the filter pills are "All" plus one pill per configured scenario; a scenario removed from the config has no pill, and one added has a pill
+
+#### Scenario: displayName is natural case, uppercased on the card
+
+- **WHEN** a scenario's `displayName` is natural case (for example `LinkedIn posts`)
+- **THEN** the filter pill shows it as-is and the nudge card tag shows it uppercased (`LINKEDIN POSTS`)

@@ -17,7 +17,12 @@
 - [x] 4.2 README: Scenarios section rewritten for the config-only model — the `scenarios` array is the full set, copy `huddle.config.example.json` → `huddle.config.json` to start, tune by hand or with an agent, and note an empty config produces no nudges (moments still captured). Examples updated to the array shape.
 - [x] 4.3 `huddle.config.example.json` is tracked (`.gitignore` matches only `huddle.config.json` — confirmed via `git check-ignore`).
 
-## 5. Verify
+## 5. Scenario display derives from config
+
+- [x] 5.0a Filter pills: replace the hardcoded XAML `ToggleButton`s with a fixed "All" chip plus a code-built chip per `ScenarioRegistry.All` (`BuildFilterChips`, reusing the All chip's style, `Tag` = key, label = `DisplayName`).
+- [x] 5.0b `displayName` is natural case: `NudgeCard` uppercases it at the tag; the config default becomes the key (not uppercased); the example config's `displayName`s are natural case (`Achievements`, `LinkedIn posts`, …).
+
+## 6. Verify
 
 - [x] 5.1 `dotnet build Huddle.slnx -c Debug` clean; no references to the deleted scenario classes remain.
 - [x] 5.2 No config (or no `scenarios`) → no scenarios run; a capture tick still stores a moment.
@@ -40,3 +45,5 @@ Verified on the personal machine (2026-08-22), Claude provider.
 **Invalid/duplicate** — the validation logic is unchanged from the prior config-scenarios change (now without the built-in-collision case); a missing-`systemPrompt` entry and a duplicate `key` are skipped with a warning, the rest run.
 
 The durable config was installed at `%LOCALAPPDATA%\Huddle\huddle.config.json` (a copy of the example) so this machine keeps running the four scenarios.
+
+**Scenario display** — the filter pills now build from `ScenarioRegistry.All` at panel startup (a fixed "All" chip plus one per configured scenario), so they always match the config; a removed scenario has no pill, an added one has a pill. `displayName` is stored natural case and uppercased only on the card tag. Build clean and the app launches (the `BuildFilterChips` init runs without error).

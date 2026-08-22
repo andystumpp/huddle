@@ -54,7 +54,7 @@ Each scenario in the array needs only `key` and `systemPrompt`; everything else 
 | --- | --- | --- |
 | `key` | *(required)* | Unique id (must not repeat another scenario's key). |
 | `systemPrompt` | *(required)* | The prompt — describe **when to emit, when to stay silent, and the voice**. Do not describe the output JSON; that shape is enforced for you. May be a **string, or an array of lines** joined with newlines into one prompt (see below). |
-| `displayName` | `key` uppercased | The uppercase label on the nudge card. |
+| `displayName` | `key` | Natural-case label — shown as-is on the filter pill, and uppercased on the nudge card. |
 | `accentColorHex` | `#6BA6FF` | Nudge-card accent. |
 | `cadenceHours` | `6` | How often it may run. |
 | `trailSize` | `60` | How many recent moments it sees. |
@@ -89,7 +89,7 @@ any other line to accept its default):
 "scenarios": [
   {
     "key": "value-delivery",        // required — unique id
-    "displayName": "VALUE-DELIVERY",// uppercase label on the nudge card (default: key uppercased)
+    "displayName": "Value delivery", // natural-case label (default: the key); uppercased on the card, as-is on the pill
     "accentColorHex": "#6BA6FF",    // nudge-card accent
     "cadenceHours": 6,              // how often it may run
     "trailSize": 60,                // recent moments it sees

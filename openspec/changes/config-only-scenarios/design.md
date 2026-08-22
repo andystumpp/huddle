@@ -70,6 +70,10 @@ The four built-in classes are deleted; `ConfiguredScenario` (built from a `Scena
 
 `huddle.config.example.json` is committed (the `.gitignore` rule matches only `huddle.config.json`, so the example is tracked). The user copies it to the resolved config location and renames it. It is the canonical, human-readable home for the default prompts.
 
+### D5: The scenario UI derives from config, and `displayName` is natural case
+
+The filter pills were a hardcoded XAML list of the four keys — stale the moment scenarios became config-driven (a dropped scenario left a dead pill; a custom one had none). They now build from `ScenarioRegistry.All` at startup (`BuildFilterChips`): a fixed "All" chip plus one per configured scenario. And `displayName` is stored in **natural case** (e.g. `LinkedIn posts`); the config never needs caps. The one place that wants uppercase — the nudge card tag — applies `ToUpperInvariant()` at render. Store natural, transform at the presentation edge.
+
 ## Risks / Trade-offs
 
 - **[Parity]** → The example config must reproduce today's four scenarios (prompts verbatim as arrays of lines, same cadence/model/effort/trail). Verification bar: running on the example yields the same scenarios and nudge shapes as before.

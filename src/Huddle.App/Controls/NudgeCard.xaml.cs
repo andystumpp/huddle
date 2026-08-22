@@ -71,7 +71,8 @@ public sealed partial class NudgeCard : UserControl
         UpdateTimestamp();
 
         var scenario = ScenarioRegistry.GetByKey(Nudge.Scenario);
-        ScenarioTagText.Text = scenario?.DisplayName ?? Nudge.Scenario.ToUpperInvariant();
+        // displayName is stored in natural case; uppercase only here, at the tag.
+        ScenarioTagText.Text = (scenario?.DisplayName ?? Nudge.Scenario).ToUpperInvariant();
         ScenarioDot.Fill = new SolidColorBrush(
             scenario is null ? s_fallbackDot : ParseHex(scenario.AccentColorHex));
 

@@ -161,7 +161,7 @@ internal sealed class HuddleConfig
         return new ScenarioDef
         {
             Key = key,
-            DisplayName = Str("displayName", key.ToUpperInvariant()),
+            DisplayName = Str("displayName", key),
             AccentColorHex = Str("accentColorHex", "#6BA6FF"),
             CadenceHours = Dbl("cadenceHours", 6),
             TrailSize = Int("trailSize", 60),
