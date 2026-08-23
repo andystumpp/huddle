@@ -1,5 +1,13 @@
 {
   "provider": "claude",
+
+  // Optional shared context, prepended to EVERY scenario's prompt (write who you are and
+  // what you're working on once). A string or an array of lines. Delete the // to enable:
+  // "context": [
+  //   "The user is a principal engineer working on <project>.",
+  //   "They care about <goals>; their team is <...>."
+  // ],
+
   "scenarios": [
     {
       "key": "achievements",

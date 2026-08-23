@@ -50,6 +50,14 @@ internal sealed class HuddleConfig
     /// </summary>
     public bool SkipSensitiveMoments { get; init; } = true;
 
+    /// <summary>
+    /// Shared context prepended to every scenario's system prompt (write who you are and
+    /// what you're working on once, instead of repeating it per scenario). A string or an
+    /// array of lines. Empty by default (no-op). Config key <c>context</c>. Scenarios only —
+    /// the vision/moment prompt is unaffected.
+    /// </summary>
+    public string Context { get; init; } = "";
+
     private static HuddleConfig? s_cached;
 
     public static HuddleConfig Current => s_cached ??= Load();
@@ -107,6 +115,7 @@ internal sealed class HuddleConfig
                     CaptureDenylist = denylist,
                     CaptureActiveWindowOnly = activeWindowOnly,
                     SkipSensitiveMoments = skipSensitive,
+                    Context = ReadStringOrLines(root, "context"),
                     Scenarios = ParseScenarios(root),
                 };
             }
@@ -121,6 +130,25 @@ internal sealed class HuddleConfig
         "agency" => CliProviderKind.Agency,
         _ => CliProviderKind.Claude,
     };
+
+    /// <summary>
+    /// Read a property that may be a single string or an array of strings; an array is
+    /// joined with newlines into one string (for legibly authoring long text like
+    /// <c>systemPrompt</c> and <c>context</c>). Missing/other → empty string.
+    /// </summary>
+    private static string ReadStringOrLines(JsonElement parent, string name)
+    {
+        if (!parent.TryGetProperty(name, out var v)) return "";
+        if (v.ValueKind == JsonValueKind.String) return v.GetString()!;
+        if (v.ValueKind == JsonValueKind.Array)
+        {
+            var lines = new List<string>();
+            foreach (var el in v.EnumerateArray())
+                if (el.ValueKind == JsonValueKind.String) lines.Add(el.GetString()!);
+            return string.Join("\n", lines);
+        }
+        return "";
+    }
 
     private static IReadOnlyList<ScenarioDef> ParseScenarios(JsonElement root)
     {
@@ -141,21 +169,6 @@ internal sealed class HuddleConfig
             e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : fallback;
         double Dbl(string name, double fallback) =>
             e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : fallback;
-        // systemPrompt may be a single string or an array of lines (joined with \n
-        // into one prompt) so a long prompt can be written legibly across lines.
-        string StrOrLines(string name)
-        {
-            if (!e.TryGetProperty(name, out var v)) return "";
-            if (v.ValueKind == JsonValueKind.String) return v.GetString()!;
-            if (v.ValueKind == JsonValueKind.Array)
-            {
-                var lines = new List<string>();
-                foreach (var el in v.EnumerateArray())
-                    if (el.ValueKind == JsonValueKind.String) lines.Add(el.GetString()!);
-                return string.Join("\n", lines);
-            }
-            return "";
-        }
 
         string key = Str("key", "");
         return new ScenarioDef
@@ -170,7 +183,7 @@ internal sealed class HuddleConfig
             Effort = e.TryGetProperty("effort", out var ef) && ef.ValueKind == JsonValueKind.String ? ef.GetString() : null,
             WebSearch = e.TryGetProperty("webSearch", out var ws)
                 && (ws.ValueKind == JsonValueKind.True || ws.ValueKind == JsonValueKind.False) && ws.GetBoolean(),
-            SystemPrompt = StrOrLines("systemPrompt"),
+            SystemPrompt = ReadStringOrLines(e, "systemPrompt"),
         };
     }
 
