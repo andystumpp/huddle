@@ -42,10 +42,16 @@ internal sealed class ConfiguredScenario : Scenario
     {
         string userText = BuildUserText(trail, priorNudges, DateTimeOffset.UtcNow);
 
+        // Shared config context (if any) is prepended to every scenario's own prompt.
+        string context = HuddleConfig.Current.Context;
+        string systemPrompt = string.IsNullOrWhiteSpace(context)
+            ? _def.SystemPrompt
+            : context + "\n\n" + _def.SystemPrompt;
+
         var request = new ScenarioRequest(
             Model: ModelId,
             MaxTokens: 4000,
-            SystemPrompt: _def.SystemPrompt,
+            SystemPrompt: systemPrompt,
             UserText: userText,
             JsonSchema: ScenarioPromptHelpers.BuildNudgeDraftSchema(),
             Effort: _effort,
@@ -54,7 +60,7 @@ internal sealed class ConfiguredScenario : Scenario
         BackendResult result = await Provider.CompleteAsync(request, ct).ConfigureAwait(false);
         string? text = result.Text;
 
-        ScenarioDiagnostics.LogRun(Key, ModelId, _def.SystemPrompt, userText, text, result.InputTokens, result.OutputTokens);
+        ScenarioDiagnostics.LogRun(Key, ModelId, systemPrompt, userText, text, result.InputTokens, result.OutputTokens);
 
         if (string.IsNullOrWhiteSpace(text)) return new ScenarioResult(null, null);
 

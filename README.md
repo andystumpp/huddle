@@ -29,7 +29,8 @@ through its own login.
 | `captureDenylist` | array of strings | `[]` | Case-insensitive substrings matched against the foreground app name and window title. A match **skips the whole capture tick** — no screenshot, no CLI call, no moment. |
 | `captureScope` | `fullScreen` \| `activeWindow` | `fullScreen` | `fullScreen` captures the whole primary display (rich multi-window context). `activeWindow` captures only the focused window's own pixels — nothing overlapping or behind it — which makes `captureDenylist` an exact guarantee at the cost of peripheral context. |
 | `skipSensitiveMoments` | `true` \| `false` | `true` | When the vision model flags a frame as sensitive (compensation, health, credentials, PII), the tick stores **nothing**. Summaries never contain sensitive values regardless; this additionally drops the whole moment. Set `false` to keep the value-free summary for sensitive frames. |
-| `scenarios` | object | (built-ins) | Choose the active scenario set per machine — disable built-ins and/or add your own. See [Scenarios](#scenarios) below. |
+| `context` | string or array of lines | `""` | Shared context **prepended to every scenario's prompt** — state who you are and what you're working on once, instead of repeating it per scenario. Empty = no-op. Scenarios only (not the vision/moment prompt). |
+| `scenarios` | array | `[]` | The full scenario set (there are no built-ins). Empty = no nudges. See [Scenarios](#scenarios) below. |
 
 Every field except `provider` has a default, so naming only the provider is a complete
 config. Configuration is read once at startup, so **restart Huddle** to pick up an edit.
