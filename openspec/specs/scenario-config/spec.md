@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The active scenario set comes entirely from a `scenarios` array in `huddle.config.json` — there are no built-in scenarios, so an empty (or absent) config yields no scenarios and only moments are captured. Each configured scenario runs through the shared trail → provider → `NudgeDraft` pipeline, so a config-authored scenario produces a `Nudge` without touching code. A committed `huddle.config.example.json` carries the default scenarios ready to copy. The scenario filter pills and each nudge card's scenario label are derived from the configured scenarios.
+The active scenario set comes entirely from a `scenarios` array in `huddle.config.json` — there are no built-in scenarios, so an empty (or absent) config yields no scenarios and only moments are captured. Each configured scenario runs through the shared trail → provider → `NudgeDraft` pipeline, so a config-authored scenario produces a `Nudge` without touching code. An optional top-level `context` is prepended to every scenario's system prompt, so shared framing lives in one place rather than being repeated per scenario. A committed `huddle.config.example.json` carries the default scenarios ready to copy. The scenario filter pills and each nudge card's scenario label are derived from the configured scenarios.
 
 ## Requirements
 
@@ -38,6 +38,25 @@ A scenario definition SHALL carry a `key` and a `systemPrompt`, plus optional se
 
 - **WHEN** a definition's `systemPrompt` is an array of strings
 - **THEN** the elements are joined with newlines into a single prompt, identical to writing it as one string with `\n` line breaks
+
+### Requirement: Shared context is prepended to every scenario
+
+The configuration MAY include a top-level `context` — a string, or an array of lines joined with newlines. When it is present and non-empty, it SHALL be prepended to every configured scenario's system prompt (before the scenario's own `systemPrompt`), so all scenarios share the same context without repeating it. It SHALL always be applied — there is no per-scenario opt-out. When `context` is absent or empty, scenarios SHALL run exactly as without it. The shared context SHALL apply to scenarios only, not to the vision/moment prompt.
+
+#### Scenario: Context is prepended to a scenario's prompt
+
+- **WHEN** `context` is set and a scenario runs
+- **THEN** the scenario's system prompt begins with the context, followed by the scenario's own `systemPrompt`, and the completion is produced as normal
+
+#### Scenario: No context is a no-op
+
+- **WHEN** `context` is absent or empty
+- **THEN** every scenario runs with exactly the system prompt it would have had without this feature
+
+#### Scenario: Context does not affect vision
+
+- **WHEN** a moment is captured
+- **THEN** the vision prompt does not include the shared `context`
 
 ### Requirement: The configuration file may be annotated
 
