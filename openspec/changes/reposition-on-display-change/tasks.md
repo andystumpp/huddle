@@ -4,8 +4,9 @@
 
 ## 2. Wire into the panel
 
-- [x] 2.1 In `PeekPanelWindow`, construct `_displayWatcher = new DisplayChangeWatcher(_hwnd)` next to `_lockWatcher`, and add a `_repositionTimer` (`DispatcherTimer`, ~400 ms). On `Changed`: `Stop()` then `Start()` the timer (trailing-edge debounce). On `Tick`: `Stop()` then `PositionPanel()`.
+- [x] 2.1 In `PeekPanelWindow`, construct `_displayWatcher = new DisplayChangeWatcher(_hwnd)` next to `_lockWatcher`, and add a `_repositionTimer` (`DispatcherTimer`, ~600 ms) plus a `_repositionPassesLeft` counter. On `Changed`: `passesLeft = 2`, `Stop()` then `Start()` (trailing-edge debounce). On `Tick`: `Stop()`, `PositionPanel()`, then `Start()` again while `--passesLeft > 0` (a settle pass + one confirmation pass for late-settling work areas).
 - [x] 2.2 Dispose `_displayWatcher` and stop `_repositionTimer` in the same teardown that disposes `_lockWatcher`.
+- [x] 2.3 In `TryGetPrimaryWorkArea`, resolve the primary monitor via `MonitorFromPoint((0,0), MONITOR_DEFAULTTOPRIMARY)` instead of `MonitorFromWindow(_hwnd)`, so the work area (and thus panel height) is the primary's regardless of where the panel currently sits. Remove the now-unused `MonitorFromWindow` import.
 
 ## 3. Verify
 
@@ -29,7 +30,9 @@ after msg:     X=1805 Y=12           (PostMessage WM_DISPLAYCHANGE, waited 800 m
 RESULT: PASS — panel snapped back to the docked edge
 ```
 
-This exercises the full path end-to-end: `WM_DISPLAYCHANGE` → `DisplayChangeWatcher` subclass → `Changed` → trailing-edge debounce → `PositionPanel()` → re-dock. The 800 ms wait confirms the debounce fired and the panel returned to the exact docked rect.
+This exercises the full path end-to-end: `WM_DISPLAYCHANGE` → `DisplayChangeWatcher` subclass → `Changed` → trailing-edge debounce → `PositionPanel()` → re-dock. Re-run after the primary-resolution + two-pass-debounce fixes (waiting 1700 ms > 2×600 ms): panel still snapped from `X=100` back to the full-height docked rect `X=1805 H=1131` — no regression on a single monitor (`MonitorFromPoint((0,0))` resolves the only display).
+
+**Primary-monitor fix (2.3).** During user testing on a real dock, the panel came in short and its height differed between the parked state (full) and the revealed state (short). Root cause: `TryGetPrimaryWorkArea` resolved the monitor with `MonitorFromWindow(panel)`, which returns the monitor the panel currently overlaps — so the computed height depended on the panel's position, and `ShowPanel`→`PositionPanel` (run while parked off the edge) read the wrong, shorter work area. Switched to `MonitorFromPoint((0,0))`, which always resolves the primary, making the height consistent across parked / sliding / revealed states. The multi-monitor confirmation is the user's manual check (3.3).
 
 **3.3 — Real display change (manual, user).** Plug in / unplug an external monitor (or change resolution / primary display) while the app runs; the panel should re-dock to the primary display's right edge on its own, no restart. Left to the user — a physical monitor change can't be driven from here.
 

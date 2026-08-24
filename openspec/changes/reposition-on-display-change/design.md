@@ -9,30 +9,38 @@ sequenceDiagram
     participant OS as Windows
     participant W as DisplayChangeWatcher<br/>(window subclass)
     participant P as PeekPanelWindow
-    participant T as Debounce timer<br/>(DispatcherTimer ~400ms)
+    participant T as Debounce timer<br/>(DispatcherTimer ~600ms, 2 passes)
     participant PP as PositionPanel()
 
     Note over OS: monitor plugged/unplugged,<br/>resolution / DPI / work area changes
     OS->>W: WM_DISPLAYCHANGE / WM_SETTINGCHANGE(SPI_SETWORKAREA)
     W->>W: DefSubclassProc(...) (pass through)
     W-->>P: Changed (on the UI thread)
-    P->>T: Stop() then Start()  (reset — trailing edge)
+    P->>T: passesLeft=2; Stop() then Start()  (reset — trailing edge)
     Note over OS,W: further burst messages each reset the timer
-    T-->>P: Tick (quiet for ~400ms)
-    P->>T: Stop()
-    P->>PP: PositionPanel()
+    T-->>P: Tick (quiet for ~600ms)
+    P->>PP: PositionPanel()  (settle pass)
+    P->>T: if --passesLeft > 0: Start() again
+    T-->>P: Tick (~600ms later)
+    P->>PP: PositionPanel()  (confirmation pass)
     PP->>OS: MoveAndResize panel + tab to primary work area
 ```
 
 **Contract crossing each boundary**
 
 - `DisplayChangeWatcher(IntPtr hwnd)` — subclasses `hwnd` via `SetWindowSubclass`, holds the `SUBCLASSPROC` delegate in a field (GC-safety), and raises `event EventHandler Changed`. It fires `Changed` on `WM_DISPLAYCHANGE` and on `WM_SETTINGCHANGE` when `wParam == SPI_SETWORKAREA`; every message is still forwarded to `DefSubclassProc`. `Dispose()` removes the subclass. Messages arrive on the window's own thread, so `Changed` handlers may touch UI state directly (same contract as `SessionLockWatcher`).
-- `PeekPanelWindow` — owns a `_displayWatcher` and a `_repositionTimer` (`DispatcherTimer`, ~400 ms). `Changed` → `Stop()`+`Start()` the timer (trailing-edge debounce). `Tick` → `Stop()` then `PositionPanel()`. Both are created next to `_lockWatcher` and disposed/stopped in the same teardown.
-- `PositionPanel()` — unchanged. It reads `TryGetPrimaryWorkArea` (primary monitor work area + DPI) and re-lays the panel and tab. Idempotent: calling it when nothing moved is a no-op reposition to the same rect.
+- `PeekPanelWindow` — owns a `_displayWatcher`, a `_repositionTimer` (`DispatcherTimer`, ~600 ms), and a `_repositionPassesLeft` counter. `Changed` → set `passesLeft = 2`, `Stop()`+`Start()` (trailing-edge debounce). `Tick` → `Stop()`, `PositionPanel()`, and `Start()` again while `--passesLeft > 0`. Created next to `_lockWatcher` and disposed/stopped in the same teardown.
+- `PositionPanel()` — layout math unchanged, but `TryGetPrimaryWorkArea` now resolves the **primary** monitor via `MonitorFromPoint((0,0), MONITOR_DEFAULTTOPRIMARY)` rather than `MonitorFromWindow(panel)`. Idempotent: calling it when nothing moved is a no-op reposition to the same rect.
 
-## Why trailing-edge debounce, and why 400 ms is enough
+## Resolving the primary monitor (not the panel's monitor)
 
-`WM_DISPLAYCHANGE` is delivered *after* Windows has applied the new topology, so whatever the handler reads is already the settled state. The debounce exists only to avoid thrashing during a burst (a dock event fires several messages in quick succession). Resetting the timer on each message guarantees the *last* message triggers a final `PositionPanel()`. Because repositioning is idempotent, even a slow dock that fires two separated bursts is fine — each fire re-docks to the then-current primary, and the last one wins. 400 ms only needs to out-wait a tight burst, which it does comfortably; the exact value is not load-bearing.
+`TryGetPrimaryWorkArea` was named for the primary but resolved the monitor with `MonitorFromWindow(_hwnd, MONITOR_DEFAULTTOPRIMARY)`. `MonitorFromWindow` returns the monitor the window's rectangle **overlaps** — the flag is only a fallback for a fully off-screen window. So the work area (hence the panel's height and dock edge) depended on where the panel currently sat. After a display switch it read whatever monitor the stale rect touched — often the shorter one — which surfaced as a panel that reveals short, and as a height that differs between the parked state (last full-height dock) and the revealed state (`ShowPanel` re-runs `PositionPanel` while the panel sits parked off the edge).
+
+The primary monitor's top-left is `(0,0)` in virtual-screen coordinates by definition, so `MonitorFromPoint((0,0), …)` resolves the primary independently of the panel's position. Every `PositionPanel` call now computes the same primary work area, so the height is consistent across parked / sliding / revealed states.
+
+## Why trailing-edge debounce, plus a confirmation pass
+
+`WM_DISPLAYCHANGE` is delivered *after* Windows applies a change, but a full dock is multi-stage: the external attaches, the mode is set, the primary is reassigned, and work areas recompute — spread across a burst of messages, with the new primary's work area sometimes settling a beat after the last one. Trailing-edge debounce (reset on each message) makes the *last* message trigger the reposition; the second **confirmation pass** ~600 ms later catches a work area that finalized just after the first pass. Repositioning is idempotent, so the confirmation is a no-op whenever the settle pass already landed right. The exact interval is not load-bearing — it only needs to out-wait the burst.
 
 ## Why a separate watcher (not the existing one)
 
@@ -40,5 +48,5 @@ sequenceDiagram
 
 ## Deliberately omitted
 
-- **Per-monitor tracking / "stay on the current screen".** The panel targets the primary display (`MONITOR_DEFAULTTOPRIMARY`), matching existing behavior; following a specific monitor is a separate feature, not this bug fix.
+- **Per-monitor tracking / "stay on the current screen".** The panel targets the primary display; following a specific non-primary monitor is a separate feature, not this bug fix.
 - **`WM_DPICHANGED` handling.** A topology change already arrives as `WM_DISPLAYCHANGE`, and `PositionPanel` re-reads `GetDpiForMonitor` each run, so DPI is covered without a second handler that could contend with the framework.
