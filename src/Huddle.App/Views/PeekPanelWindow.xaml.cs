@@ -58,6 +58,7 @@ public sealed partial class PeekPanelWindow : Window
     private SessionLockWatcher? _lockWatcher;
     private DisplayChangeWatcher? _displayWatcher;
     private DispatcherTimer? _repositionTimer;
+    private int _repositionPassesLeft;
 
     // Cached panel geometry (set by PositionPanel).
     private int _panelY;
@@ -181,18 +182,22 @@ public sealed partial class PeekPanelWindow : Window
         _lockWatcher.Unlocked += (_, _) => ResumeFromLock();
 
         // Re-dock when the display configuration changes (monitor plug/unplug, resolution /
-        // DPI / work-area change) so the panel isn't left stranded mid-screen. One topology
-        // change emits a burst of messages, so a trailing-edge debounce collapses them into
-        // a single PositionPanel() once things go quiet.
+        // DPI / work-area change) so the panel isn't left stranded or mis-sized. A dock event
+        // lands as a burst of messages, and the new primary + its work area can settle a beat
+        // after the last one — so trailing-edge debounce the burst, then run PositionPanel
+        // twice a short spacing apart (a settle pass and a confirmation pass). Re-docking is
+        // idempotent, so the confirmation is a no-op when the first pass already landed right.
         _displayWatcher = new DisplayChangeWatcher(_hwnd);
-        _repositionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _repositionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
         _repositionTimer.Tick += (_, _) =>
         {
             _repositionTimer!.Stop();
             PositionPanel();
+            if (--_repositionPassesLeft > 0) _repositionTimer.Start();
         };
         _displayWatcher.Changed += (_, _) =>
         {
+            _repositionPassesLeft = 2; // settle pass + one confirmation pass
             _repositionTimer!.Stop();
             _repositionTimer.Start();
         };
@@ -889,7 +894,11 @@ public sealed partial class PeekPanelWindow : Window
         workArea = default;
         dpi = 96;
 
-        var monitor = MonitorFromWindow(_hwnd, MONITOR_DEFAULTTOPRIMARY);
+        // The primary monitor's top-left is always (0,0) in virtual-screen coordinates, so
+        // MonitorFromPoint at the origin resolves the primary regardless of where the panel
+        // currently sits. (MonitorFromWindow would return whatever monitor the panel's stale
+        // rect overlaps, which after a display switch is often the wrong, shorter one.)
+        var monitor = MonitorFromPoint(new POINT { X = 0, Y = 0 }, MONITOR_DEFAULTTOPRIMARY);
         if (monitor == IntPtr.Zero) return false;
 
         var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
@@ -936,7 +945,7 @@ public sealed partial class PeekPanelWindow : Window
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
     [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, int dwFlags);
+    private static extern IntPtr MonitorFromPoint(POINT pt, int dwFlags);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
