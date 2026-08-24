@@ -38,7 +38,6 @@ internal enum Effort { Low, Medium, High, XHigh, Max }
 /// </summary>
 internal sealed record ScenarioRequest(
     string Model,
-    int MaxTokens,
     string SystemPrompt,
     string UserText,
     Dictionary<string, JsonElement> JsonSchema,
