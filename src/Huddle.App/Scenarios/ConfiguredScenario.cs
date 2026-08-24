@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Huddle.Config;
+using Huddle.Memory;
 using Huddle.Models;
 
 namespace Huddle.Scenarios;
@@ -42,11 +43,16 @@ internal sealed class ConfiguredScenario : Scenario
     {
         string userText = BuildUserText(trail, priorNudges, DateTimeOffset.UtcNow);
 
-        // Shared config context (if any) is prepended to every scenario's own prompt.
+        // System prompt = static context (you write) + learned profile (Huddle learns) +
+        // the scenario's own prompt. Each part omitted when empty; the profile is read
+        // fresh so a new reflection or a manual edit applies without a restart.
+        var parts = new List<string>();
         string context = HuddleConfig.Current.Context;
-        string systemPrompt = string.IsNullOrWhiteSpace(context)
-            ? _def.SystemPrompt
-            : context + "\n\n" + _def.SystemPrompt;
+        if (!string.IsNullOrWhiteSpace(context)) parts.Add(context.Trim());
+        string profile = ProfileStore.Read();
+        if (!string.IsNullOrWhiteSpace(profile)) parts.Add(profile.Trim());
+        parts.Add(_def.SystemPrompt);
+        string systemPrompt = string.Join("\n\n", parts);
 
         var request = new ScenarioRequest(
             Model: ModelId,

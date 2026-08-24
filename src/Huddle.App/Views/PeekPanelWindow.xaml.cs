@@ -14,6 +14,7 @@ using Windows.Graphics;
 using WinRT.Interop;
 using Huddle.Capture;
 using Huddle.Config;
+using Huddle.Memory;
 using Huddle.Models;
 using Huddle.Scenarios;
 using Huddle.Storage;
@@ -410,6 +411,12 @@ public sealed partial class PeekPanelWindow : Window
             UpdateObservationCount();
 
             await RunScenariosAsync();
+
+            // Daily reflection: distil the trail into the learned profile (profile.md).
+            if (ReflectionJob.IsDue())
+            {
+                await ReflectionJob.RunAsync();
+            }
         }
         catch (Exception ex)
         {
