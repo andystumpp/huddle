@@ -18,8 +18,19 @@ internal static class ScenarioPromptHelpers
         {
             emit = new { type = "boolean" },
             reason = new { type = "string" },
-            title = new { type = "string" },
-            body = new { type = "string" },
+            title = new
+            {
+                type = "string",
+                description = "A short concept — at most ~8 words / ~60 characters. Name the idea or "
+                    + "outcome in plain language the user can skim at a glance. NOT a full sentence, and "
+                    + "NOT the whole insight (that goes in body). No file/type names, PR numbers, CLI "
+                    + "commands, or code identifiers in the title — those belong in body.",
+            },
+            body = new
+            {
+                type = "string",
+                description = "1-3 sentences carrying the specifics, evidence, named tools/sources, and any URLs.",
+            },
             sources = new { type = "array", items = new { type = "string" } },
         };
         return new Dictionary<string, JsonElement>
