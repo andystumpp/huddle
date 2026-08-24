@@ -67,7 +67,15 @@ public sealed partial class NudgeCard : UserControl
     {
         if (Nudge is null) return;
         TitleText.Text = Nudge.Title;
-        BodyText.Text = Nudge.Body;
+
+        // Render the body with clickable links. Cards are recycled in the virtualized
+        // list, so clear and rebuild the inlines on every Apply().
+        BodyText.Inlines.Clear();
+        foreach (var inline in BodyTextLinkifier.BuildInlines(Nudge.Body))
+        {
+            BodyText.Inlines.Add(inline);
+        }
+
         UpdateTimestamp();
 
         var scenario = ScenarioRegistry.GetByKey(Nudge.Scenario);
