@@ -56,7 +56,6 @@ internal sealed class ConfiguredScenario : Scenario
 
         var request = new ScenarioRequest(
             Model: ModelId,
-            MaxTokens: 4000,
             SystemPrompt: systemPrompt,
             UserText: userText,
             JsonSchema: ScenarioPromptHelpers.BuildNudgeDraftSchema(),

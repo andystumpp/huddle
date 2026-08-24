@@ -38,7 +38,6 @@ internal static class ReflectionJob
 
             var request = new ScenarioRequest(
                 Model: "opus",
-                MaxTokens: 4000,
                 SystemPrompt: SystemPrompt,
                 UserText: userText,
                 JsonSchema: BuildProfileSchema(),
