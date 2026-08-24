@@ -56,6 +56,8 @@ public sealed partial class PeekPanelWindow : Window
     private DispatcherTimer? _statusTimer;
     private bool _pausedByLock;
     private SessionLockWatcher? _lockWatcher;
+    private DisplayChangeWatcher? _displayWatcher;
+    private DispatcherTimer? _repositionTimer;
 
     // Cached panel geometry (set by PositionPanel).
     private int _panelY;
@@ -178,6 +180,23 @@ public sealed partial class PeekPanelWindow : Window
         _lockWatcher.Locked += (_, _) => PauseForLock();
         _lockWatcher.Unlocked += (_, _) => ResumeFromLock();
 
+        // Re-dock when the display configuration changes (monitor plug/unplug, resolution /
+        // DPI / work-area change) so the panel isn't left stranded mid-screen. One topology
+        // change emits a burst of messages, so a trailing-edge debounce collapses them into
+        // a single PositionPanel() once things go quiet.
+        _displayWatcher = new DisplayChangeWatcher(_hwnd);
+        _repositionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _repositionTimer.Tick += (_, _) =>
+        {
+            _repositionTimer!.Stop();
+            PositionPanel();
+        };
+        _displayWatcher.Changed += (_, _) =>
+        {
+            _repositionTimer!.Stop();
+            _repositionTimer.Start();
+        };
+
         // Spin up the peek-tab window (the count badge that lives at the right
         // edge whenever the panel is hidden). Created here so PositionPanel has
         // already cached the work-area rect.
@@ -200,6 +219,11 @@ public sealed partial class PeekPanelWindow : Window
     {
         _lockWatcher?.Dispose();
         _lockWatcher = null;
+
+        _displayWatcher?.Dispose();
+        _displayWatcher = null;
+        _repositionTimer?.Stop();
+        _repositionTimer = null;
 
         _hoverTimer?.Stop();
         _slideTimer?.Stop();
