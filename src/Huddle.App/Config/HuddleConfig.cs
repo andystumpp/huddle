@@ -58,6 +58,17 @@ internal sealed class HuddleConfig
     /// </summary>
     public string Context { get; init; } = "";
 
+    /// <summary>
+    /// The peek panel's width in DIPs. Default 384, clamped to <see cref="MinPanelWidth"/>..
+    /// <see cref="MaxPanelWidth"/> so an out-of-range value can't produce an unusable window.
+    /// Config key <c>panelWidth</c>.
+    /// </summary>
+    public int PanelWidth { get; init; } = DefaultPanelWidth;
+
+    private const int DefaultPanelWidth = 384;
+    private const int MinPanelWidth = 280;
+    private const int MaxPanelWidth = 1200;
+
     private static HuddleConfig? s_cached;
 
     public static HuddleConfig Current => s_cached ??= Load();
@@ -107,6 +118,10 @@ internal sealed class HuddleConfig
                 bool skipSensitive = !(root.TryGetProperty("skipSensitiveMoments", out var sk)
                     && sk.ValueKind == JsonValueKind.False);
 
+                int panelWidth = root.TryGetProperty("panelWidth", out var pw) && pw.ValueKind == JsonValueKind.Number
+                    ? Math.Clamp(pw.GetInt32(), MinPanelWidth, MaxPanelWidth)
+                    : DefaultPanelWidth;
+
                 return new HuddleConfig
                 {
                     Provider = provider,
@@ -116,6 +131,7 @@ internal sealed class HuddleConfig
                     CaptureActiveWindowOnly = activeWindowOnly,
                     SkipSensitiveMoments = skipSensitive,
                     Context = ReadStringOrLines(root, "context"),
+                    PanelWidth = panelWidth,
                     Scenarios = ParseScenarios(root),
                 };
             }

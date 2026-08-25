@@ -24,7 +24,7 @@ namespace Huddle.Views;
 
 public sealed partial class PeekPanelWindow : Window
 {
-    private const int PanelWidth = 384;
+    private readonly int _panelWidthDip = HuddleConfig.Current.PanelWidth;
     private const int RightGap = 12;
     private const int TopGap = 12;
     private const int BottomGap = 12;
@@ -696,7 +696,7 @@ public sealed partial class PeekPanelWindow : Window
         }
         _lastDpi = dpi;
 
-        var widthPx = ScaleToPx(PanelWidth, dpi);
+        var widthPx = ScaleToPx(_panelWidthDip, dpi);
         var rightGapPx = ScaleToPx(RightGap, dpi);
         var topGapPx = ScaleToPx(TopGap, dpi);
         var bottomGapPx = ScaleToPx(BottomGap, dpi);
@@ -716,7 +716,7 @@ public sealed partial class PeekPanelWindow : Window
         var startX = _isVisible ? _visibleX : _hiddenX;
         _appWindow.MoveAndResize(new RectInt32(startX, _panelY, widthPx, heightPx));
 
-        LookBarClip.Rect = new Windows.Foundation.Rect(0, 0, PanelWidth, 2);
+        LookBarClip.Rect = new Windows.Foundation.Rect(0, 0, _panelWidthDip, 2);
 
         // Tab window — anchored so its left 28 dip sit on screen at the right
         // edge, vertically centered. The OS clamps the actual window wider
