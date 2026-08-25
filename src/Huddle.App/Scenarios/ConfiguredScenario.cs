@@ -34,6 +34,7 @@ internal sealed class ConfiguredScenario : Scenario
     public override TimeSpan Cadence => TimeSpan.FromHours(_def.CadenceHours);
     public override int TrailSize => _def.TrailSize;
     public override int PriorNudgesSize => _def.PriorNudgesSize;
+    public override bool ShowInAll => _def.ShowInAll;
     public override string ModelId => _def.Model;
 
     protected override async Task<ScenarioResult> ExecuteAsync(

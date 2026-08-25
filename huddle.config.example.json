@@ -17,6 +17,8 @@
       "trailSize": 60,
       "priorNudgesSize": 20,
       "model": "sonnet",
+      // showInAll:false keeps these out of the crowded "All" view; still visible via the Achievements pill.
+      "showInAll": false,
       "systemPrompt": [
         "You are Huddle's Achievement Tracker scenario.",
         "",

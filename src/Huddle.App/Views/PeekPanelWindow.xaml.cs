@@ -487,7 +487,7 @@ public sealed partial class PeekPanelWindow : Window
 
             await NudgeStore.AddAsync(result.Nudge);
             _allNudges.Insert(0, result.Nudge);
-            if (!_panelSeenForWhile) _unreadNudges++;
+            if (!_panelSeenForWhile && ShowsInAll(result.Nudge.Scenario)) _unreadNudges++;
             RebuildNudgeDisplay();
         }
     }
@@ -513,7 +513,14 @@ public sealed partial class PeekPanelWindow : Window
         DateTime? currentDay = null;
         foreach (var n in _allNudges)   // newest-first
         {
-            if (_activeScenarioFilter is not null && n.Scenario != _activeScenarioFilter) continue;
+            if (_activeScenarioFilter is null)
+            {
+                if (!ShowsInAll(n.Scenario)) continue;   // "All" hides scenarios opted out via showInAll
+            }
+            else if (n.Scenario != _activeScenarioFilter)
+            {
+                continue;
+            }
 
             DateTime day = n.Ts.ToLocalTime().Date;
             if (currentDay != day)
@@ -525,6 +532,11 @@ public sealed partial class PeekPanelWindow : Window
         }
         UpdateNudgesSurface();
     }
+
+    /// <summary>Whether a scenario's nudges belong in the "All" view (default true for
+    /// unknown scenarios, matching the card's tag fallback).</summary>
+    private static bool ShowsInAll(string scenarioKey) =>
+        ScenarioRegistry.GetByKey(scenarioKey)?.ShowInAll ?? true;
 
     private static string DayLabel(DateTime day, DateTime today)
     {
@@ -595,7 +607,7 @@ public sealed partial class PeekPanelWindow : Window
                 {
                     await NudgeStore.AddAsync(result.Nudge);
                     _allNudges.Insert(0, result.Nudge);
-                    if (!_panelSeenForWhile) _unreadNudges++;
+                    if (!_panelSeenForWhile && ShowsInAll(result.Nudge.Scenario)) _unreadNudges++;
                     emitted++;
                 }
                 else

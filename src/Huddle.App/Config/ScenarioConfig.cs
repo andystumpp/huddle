@@ -18,5 +18,7 @@ internal sealed class ScenarioDef
     public string Model { get; init; } = "sonnet";
     public string? Effort { get; init; }
     public bool WebSearch { get; init; }
+    /// <summary>Whether this scenario's nudges appear in the "All" filter view. Default true.</summary>
+    public bool ShowInAll { get; init; } = true;
     public string SystemPrompt { get; init; } = "";
 }
