@@ -4,6 +4,10 @@
   // Peek panel width in pixels. Default 384; clamped to 280-1200.
   // "panelWidth": 384,
 
+  // Opt-in: read your Windows Sticky Notes (read-only) and inject them as live context
+  // into every scenario prompt. Off by default. Delete the // to enable:
+  // "stickyNotesContext": true,
+
   // Optional shared context, prepended to EVERY scenario's prompt (write who you are and
   // what you're working on once). A string or an array of lines. Delete the // to enable:
   // "context": [
