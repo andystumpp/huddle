@@ -25,7 +25,7 @@ The Huddle app SHALL run as a standard Windows desktop application with a single
 
 ### Requirement: Peek panel placement and chrome
 
-The peek panel SHALL be a 384 px wide, borderless top-level window with no native title bar or caption buttons. It SHALL dock 12 px from the right edge of the primary display's work area and SHALL stretch vertically to the full work-area height minus a 12 px gap at the top and a 12 px gap at the bottom, with a 320 px minimum height. The panel window SHALL request DWM round corners (`DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_ROUND`) and its content SHALL be clipped at an 8 px corner radius to match. Resize, minimize, and maximize SHALL be disabled. The panel SHALL recompute its dock position and slide geometry whenever it is shown and whenever the display configuration changes — a monitor is added or removed, or the resolution, DPI, or work area changes — re-docking to the primary display's work area without requiring a restart. Display-change signals SHALL be coalesced so that a burst of changes results in a single reposition. The panel SHALL remain always-on-top while open.
+The peek panel SHALL be a borderless top-level window with no native title bar or caption buttons, whose width is configurable via the top-level `panelWidth` setting (in DIPs), defaulting to 384 and clamped to a sane range so an out-of-range value cannot produce an unusable window. It SHALL dock 12 px from the right edge of the primary display's work area and SHALL stretch vertically to the full work-area height minus a 12 px gap at the top and a 12 px gap at the bottom, with a 320 px minimum height. The panel window SHALL request DWM round corners (`DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_ROUND`) and its content SHALL be clipped at an 8 px corner radius to match. Resize, minimize, and maximize SHALL be disabled. The panel SHALL recompute its dock position and slide geometry whenever it is shown and whenever the display configuration changes — a monitor is added or removed, or the resolution, DPI, or work area changes — re-docking to the primary display's work area without requiring a restart. Display-change signals SHALL be coalesced so that a burst of changes results in a single reposition. The panel SHALL remain always-on-top while open.
 
 #### Scenario: Panel stretches the work-area height
 
@@ -51,6 +51,11 @@ The peek panel SHALL be a 384 px wide, borderless top-level window with no nativ
 
 - **WHEN** a monitor is added or removed, or the resolution, DPI, or work area changes, while the app is running
 - **THEN** the panel recomputes its dock position and returns to the primary display's work-area edge without a restart, coalescing a burst of change signals into a single reposition
+
+#### Scenario: A configured width is applied
+
+- **WHEN** `panelWidth` is set to a value within the allowed range
+- **THEN** the panel docks at that width, still 12 px from the work area's right edge and stretching the work-area height; an out-of-range value is clamped into the range
 
 ### Requirement: Panel slide-out and slide-in
 
@@ -92,11 +97,11 @@ While the panel is hidden, the app SHALL show a separate always-on-top chip wind
 
 ### Requirement: Unread nudge count on the chip
 
-The chip SHALL display the number of nudges that arrived while the panel was not "seen". A nudge increments the unread count when it is inserted and the panel has not been open for the read-grace period. The unread count SHALL reset to 0 — and the panel SHALL be marked seen — once the panel has stayed open for 3 seconds; sliding out before that preserves the count. While the unread count is greater than zero, the chip SHALL render a pulsing halo behind the number; at zero the halo is still.
+The chip SHALL display the number of nudges that arrived while the panel was not "seen". A nudge increments the unread count when it is inserted and the panel has not been open for the read-grace period, unless the nudge's scenario is configured with `showInAll: false`, in which case it SHALL NOT change the unread count. The unread count SHALL reset to 0 — and the panel SHALL be marked seen — once the panel has stayed open for 3 seconds; sliding out before that preserves the count. While the unread count is greater than zero, the chip SHALL render a pulsing halo behind the number; at zero the halo is still.
 
 #### Scenario: Nudges arriving while hidden increment the count
 
-- **WHEN** the panel is hidden and a scenario emits two nudges
+- **WHEN** the panel is hidden and a `showInAll` scenario emits two nudges
 - **THEN** the chip shows "2" with a pulsing halo
 
 #### Scenario: Count resets after the panel is open 3 seconds
@@ -108,6 +113,11 @@ The chip SHALL display the number of nudges that arrived while the panel was not
 
 - **WHEN** the panel slides in and slides back out in under 3 seconds
 - **THEN** the chip still shows the previous unread count
+
+#### Scenario: A hidden scenario does not raise the count
+
+- **WHEN** the panel is hidden and a `showInAll: false` scenario emits a nudge
+- **THEN** the chip's unread count is unchanged and its halo stays still
 
 ### Requirement: Panel background and aurora sheen
 
@@ -355,7 +365,7 @@ The Nudges tab SHALL present nudges from the last 7 days, grouped under day head
 
 ### Requirement: Nudges tab scenario filter
 
-The Nudges tab SHALL provide a single-select filter that isolates one scenario's nudges. The filter SHALL offer `All` plus one option per scenario, default to `All`, and re-group the visible nudges by day when the selection changes.
+The Nudges tab SHALL provide a single-select filter that isolates one scenario's nudges. The filter SHALL offer `All` plus one option per scenario, default to `All`, and re-group the visible nudges by day when the selection changes. The `All` view SHALL show every scenario's nudges except those from scenarios configured with `showInAll: false`; those nudges SHALL appear only under their own scenario filter. Every configured scenario SHALL keep its own filter option regardless of `showInAll`.
 
 #### Scenario: Filtering to one scenario
 
@@ -365,9 +375,14 @@ The Nudges tab SHALL provide a single-select filter that isolates one scenario's
 #### Scenario: Returning to all scenarios
 
 - **WHEN** the user selects `All`
-- **THEN** the list shows every scenario's nudges again, grouped by day
+- **THEN** the list shows every scenario's nudges again, grouped by day, except those from `showInAll: false` scenarios
 
 #### Scenario: The filter is single-select
 
 - **WHEN** the user selects a scenario chip while another is active
 - **THEN** the newly selected chip becomes the only active one
+
+#### Scenario: A hidden scenario is still reachable by its pill
+
+- **WHEN** a scenario is configured with `showInAll: false` and the user selects that scenario's filter
+- **THEN** the list shows that scenario's nudges, even though they do not appear under `All`
