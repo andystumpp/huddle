@@ -169,6 +169,9 @@ internal sealed class HuddleConfig
             e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : fallback;
         double Dbl(string name, double fallback) =>
             e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : fallback;
+        bool Bool(string name, bool fallback) =>
+            e.TryGetProperty(name, out var v) && (v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False)
+                ? v.GetBoolean() : fallback;
 
         string key = Str("key", "");
         return new ScenarioDef
@@ -181,8 +184,8 @@ internal sealed class HuddleConfig
             PriorNudgesSize = Int("priorNudgesSize", 10),
             Model = Str("model", "sonnet"),
             Effort = e.TryGetProperty("effort", out var ef) && ef.ValueKind == JsonValueKind.String ? ef.GetString() : null,
-            WebSearch = e.TryGetProperty("webSearch", out var ws)
-                && (ws.ValueKind == JsonValueKind.True || ws.ValueKind == JsonValueKind.False) && ws.GetBoolean(),
+            WebSearch = Bool("webSearch", false),
+            ShowInAll = Bool("showInAll", true),
             SystemPrompt = ReadStringOrLines(e, "systemPrompt"),
         };
     }

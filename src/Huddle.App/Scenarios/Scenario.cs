@@ -21,6 +21,9 @@ internal abstract class Scenario
     public abstract int TrailSize { get; }
     public virtual int PriorNudgesSize => 10;
 
+    /// <summary>Whether this scenario's nudges appear in the "All" filter view. Default true.</summary>
+    public virtual bool ShowInAll => true;
+
     /// <summary>The model name for this scenario's call (a CLI alias). Sonnet by default.</summary>
     public virtual string ModelId => "sonnet";
 
