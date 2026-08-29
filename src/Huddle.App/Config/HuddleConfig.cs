@@ -211,6 +211,7 @@ internal sealed class HuddleConfig
             PriorNudgesSize = Int("priorNudgesSize", 10),
             Model = Str("model", "sonnet"),
             Effort = e.TryGetProperty("effort", out var ef) && ef.ValueKind == JsonValueKind.String ? ef.GetString() : null,
+            Agent = e.TryGetProperty("agent", out var ag) && ag.ValueKind == JsonValueKind.String ? ag.GetString() : null,
             WebSearch = Bool("webSearch", false),
             ShowInAll = Bool("showInAll", true),
             SystemPrompt = ReadStringOrLines(e, "systemPrompt"),
