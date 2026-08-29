@@ -54,6 +54,13 @@ internal sealed class CopilotCliProvider : ICliProvider
             psi.ArgumentList.Add("-s");
             psi.ArgumentList.Add("--model");
             psi.ArgumentList.Add(EffectiveModel(request.Model));
+            if (!string.IsNullOrWhiteSpace(request.Agent))
+            {
+                // Run the scenario through a user-built custom agent. Additive with --model
+                // /--effort; the agent must still return the NudgeDraft JSON the scenario expects.
+                psi.ArgumentList.Add("--agent");
+                psi.ArgumentList.Add(request.Agent);
+            }
             psi.ArgumentList.Add("--no-ask-user");
             psi.ArgumentList.Add("--allow-tool=read");
             psi.ArgumentList.Add("--add-dir");

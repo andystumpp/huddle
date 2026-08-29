@@ -42,7 +42,8 @@ internal sealed record ScenarioRequest(
     string UserText,
     Dictionary<string, JsonElement> JsonSchema,
     Effort? Effort = null,
-    bool WebSearch = false);
+    bool WebSearch = false,
+    string? Agent = null);
 
 /// <summary>
 /// The assistant text plus token usage. Token counts are null on CLI providers

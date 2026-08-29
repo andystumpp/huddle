@@ -24,6 +24,9 @@
       "trailSize": 60,
       "priorNudgesSize": 20,
       "model": "sonnet",
+      // Optional (Copilot/Agency only): run this scenario through a custom agent, passed as --agent.
+      // Ignored by the Claude provider. Delete the // to enable:
+      // "agent": "my-copilot-agent",
       // showInAll:false keeps these out of the crowded "All" view; still visible via the Achievements pill.
       "showInAll": false,
       "systemPrompt": [

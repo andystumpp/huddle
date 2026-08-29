@@ -63,7 +63,8 @@ internal sealed class ConfiguredScenario : Scenario
             UserText: userText,
             JsonSchema: ScenarioPromptHelpers.BuildNudgeDraftSchema(),
             Effort: _effort,
-            WebSearch: _def.WebSearch);
+            WebSearch: _def.WebSearch,
+            Agent: _def.Agent);
 
         BackendResult result = await Provider.CompleteAsync(request, ct).ConfigureAwait(false);
         string? text = result.Text;
