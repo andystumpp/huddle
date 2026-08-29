@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using Huddle.Config;
 using Huddle.Scenarios;
@@ -23,7 +24,8 @@ internal static class StickyNotesContext
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Packages", "Microsoft.MicrosoftStickyNotes_8wekyb3d8bbwe", "LocalState", "plum.sqlite");
 
-    private const int MaxChars = 4000; // keep the injected block bounded
+    // Each note's Text is stored as "\id=<guid> <the note text>"; strip the leading token.
+    private static readonly Regex IdPrefix = new(@"^\\id=\S+\s*", RegexOptions.Compiled);
 
     /// <summary>The current notes as a labelled block, or an empty string.</summary>
     public static string Read()
@@ -40,13 +42,8 @@ internal static class StickyNotesContext
 
             var sb = new StringBuilder();
             sb.AppendLine("The user's current sticky notes (their live work plan / reminders):");
-            foreach (var n in notes)
-            {
-                sb.Append("- ").AppendLine(n);
-                if (sb.Length >= MaxChars) break;
-            }
-            string block = sb.ToString().TrimEnd();
-            return block.Length > MaxChars ? block.Substring(0, MaxChars).TrimEnd() + " …" : block;
+            foreach (var n in notes) sb.Append("- ").AppendLine(n);
+            return sb.ToString().TrimEnd();
         }
         catch (Exception ex)
         {
@@ -68,12 +65,14 @@ internal static class StickyNotesContext
         using var connection = new SqliteConnection(csb.ToString());
         connection.Open();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT text FROM note";
+        // Live notes only (DeletedAt is null for a live note), newest first.
+        command.CommandText = "SELECT Text FROM Note WHERE DeletedAt IS NULL ORDER BY UpdatedAt DESC";
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
             if (reader.IsDBNull(0)) continue;
-            string t = ScenarioPromptHelpers.NormalizeWhitespace(reader.GetString(0));
+            string stripped = IdPrefix.Replace(reader.GetString(0), string.Empty);
+            string t = ScenarioPromptHelpers.NormalizeWhitespace(stripped);
             if (t.Length > 0) notes.Add(t);
         }
         return notes;
