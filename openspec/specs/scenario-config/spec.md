@@ -22,12 +22,12 @@ The system SHALL build the set of scenarios it runs entirely from a non-secret `
 
 ### Requirement: A scenario is defined inline in configuration
 
-A scenario definition SHALL carry a `key` and a `systemPrompt`, plus optional settings: `displayName`, `accentColorHex`, `cadenceHours`, `trailSize`, `priorNudgesSize`, `model`, `effort`, `webSearch`, and `showInAll`. Only `key` and `systemPrompt` SHALL be required; every other field SHALL default (`displayName` from the key, a neutral accent color, a default cadence, trail size, prior-nudge count, the default model, no effort, web search off, and `showInAll` true). The `systemPrompt` MAY be given either as a single string or as an array of strings joined with newlines into one prompt. The `systemPrompt` SHALL describe only when the scenario emits, when it stays silent, and in what voice — it SHALL NOT need to describe the output JSON.
+A scenario definition SHALL carry a `key` and a `systemPrompt`, plus optional settings: `displayName`, `accentColorHex`, `cadenceHours`, `trailSize`, `priorNudgesSize`, `model`, `effort`, `webSearch`, `showInAll`, and `agent`. Only `key` and `systemPrompt` SHALL be required; every other field SHALL default (`displayName` from the key, a neutral accent color, a default cadence, trail size, prior-nudge count, the default model, no effort, web search off, `showInAll` true, and no agent). The `systemPrompt` MAY be given either as a single string or as an array of strings joined with newlines into one prompt. The `systemPrompt` SHALL describe only when the scenario emits, when it stays silent, and in what voice — it SHALL NOT need to describe the output JSON.
 
 #### Scenario: A minimal definition runs with defaults
 
 - **WHEN** a definition provides only `key` and `systemPrompt`
-- **THEN** the scenario runs using default presentation and execution settings, including `showInAll` true
+- **THEN** the scenario runs using default presentation and execution settings, including `showInAll` true and no agent
 
 #### Scenario: A full definition uses its provided settings
 
@@ -43,6 +43,11 @@ A scenario definition SHALL carry a `key` and a `systemPrompt`, plus optional se
 
 - **WHEN** a definition sets `showInAll` to `false`
 - **THEN** the scenario runs normally and emits nudges, but those nudges are kept out of the `All` view (they remain visible under the scenario's own filter)
+
+#### Scenario: A scenario selects a Copilot agent
+
+- **WHEN** a definition sets `agent` to a Copilot agent name
+- **THEN** that agent name is carried on the scenario's completion request for the provider to use
 
 ### Requirement: Shared context is prepended to every scenario
 
