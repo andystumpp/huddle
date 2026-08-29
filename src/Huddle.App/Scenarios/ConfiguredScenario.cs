@@ -44,12 +44,14 @@ internal sealed class ConfiguredScenario : Scenario
     {
         string userText = BuildUserText(trail, priorNudges, DateTimeOffset.UtcNow);
 
-        // System prompt = static context (you write) + learned profile (Huddle learns) +
-        // the scenario's own prompt. Each part omitted when empty; the profile is read
-        // fresh so a new reflection or a manual edit applies without a restart.
+        // System prompt = static context (you write) + dynamic context (your live sticky
+        // notes, opt-in) + learned profile (Huddle learns) + the scenario's own prompt. Each
+        // part is omitted when empty and read fresh, so an edit applies without a restart.
         var parts = new List<string>();
         string context = HuddleConfig.Current.Context;
         if (!string.IsNullOrWhiteSpace(context)) parts.Add(context.Trim());
+        string notes = StickyNotesContext.Read();
+        if (!string.IsNullOrWhiteSpace(notes)) parts.Add(notes.Trim());
         string profile = ProfileStore.Read();
         if (!string.IsNullOrWhiteSpace(profile)) parts.Add(profile.Trim());
         parts.Add(_def.SystemPrompt);
