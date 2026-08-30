@@ -1,8 +1,14 @@
 {
-  "provider": "claude",
+  "provider": "claude",                    // claude | copilot | agency — the local CLI for vision AND scenarios
 
-  // Peek panel width in pixels. Default 384; clamped to 280-1200.
-  // "panelWidth": 384,
+  // ---- Optional top-level settings (all shown at their defaults; delete a // to enable) ----
+
+  // "command": "claude",                  // override the CLI binary if it's not on PATH under its usual name
+  // "model": "claude-opus-5",             // default model for copilot/agency (claude picks its model per scenario)
+  // "captureDenylist": ["1Password", "Bank"], // skip a whole capture tick when the foreground app/title matches (case-insensitive substring)
+  // "captureScope": "fullScreen",         // fullScreen | activeWindow — activeWindow captures only the focused window's pixels
+  // "skipSensitiveMoments": true,         // drop the whole moment when the vision model flags the frame sensitive (default true)
+  // "panelWidth": 384,                    // docked peek-panel width in pixels; clamped to 280-1200
 
   // Optional shared context, prepended to EVERY scenario's prompt (write who you are and
   // what you're working on once). A string or an array of lines. Delete the // to enable:
