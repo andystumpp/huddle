@@ -5,18 +5,17 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
-using Huddle.Config;
 using Huddle.Scenarios;
 
 namespace Huddle.Memory;
 
 /// <summary>
-/// Opt-in dynamic context from the user's Windows Sticky Notes. When
-/// <see cref="HuddleConfig.StickyNotesContext"/> is on, reads the packaged Sticky Notes
+/// Dynamic context from the user's Windows Sticky Notes: reads the packaged Sticky Notes
 /// SQLite store read-only and returns a labelled block of the note text for injection into
-/// scenario prompts. Every failure path (flag off, missing DB, lock, schema mismatch)
-/// returns an empty string and never throws — same contract as <see cref="ProfileStore"/>.
-/// Legacy pre-1607 <c>.snt</c> storage is not supported.
+/// a scenario prompt. The caller gates the call (a scenario opts in via its <c>stickyNotes</c>
+/// field). Every failure path (missing DB, lock, schema mismatch) returns an empty string
+/// and never throws — same contract as <see cref="ProfileStore"/>. Legacy pre-1607
+/// <c>.snt</c> storage is not supported.
 /// </summary>
 internal static class StickyNotesContext
 {
@@ -30,8 +29,6 @@ internal static class StickyNotesContext
     /// <summary>The current notes as a labelled block, or an empty string.</summary>
     public static string Read()
     {
-        if (!HuddleConfig.Current.StickyNotesContext) return string.Empty;
-
         try
         {
             string path = DbPath;

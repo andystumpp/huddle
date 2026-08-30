@@ -4,10 +4,6 @@
   // Peek panel width in pixels. Default 384; clamped to 280-1200.
   // "panelWidth": 384,
 
-  // Opt-in: read your Windows Sticky Notes (read-only) and inject them as live context
-  // into every scenario prompt. Off by default. Delete the // to enable:
-  // "stickyNotesContext": true,
-
   // Optional shared context, prepended to EVERY scenario's prompt (write who you are and
   // what you're working on once). A string or an array of lines. Delete the // to enable:
   // "context": [
@@ -27,6 +23,9 @@
       // Optional (Copilot/Agency only): run this scenario through a custom agent, passed as --agent.
       // Ignored by the Claude provider. Delete the // to enable:
       // "agent": "my-copilot-agent",
+      // Optional: inject your live Windows Sticky Notes as dynamic context into THIS scenario's
+      // prompt (read-only, off by default). Set per scenario. Delete the // to enable:
+      // "stickyNotes": true,
       // showInAll:false keeps these out of the crowded "All" view; still visible via the Achievements pill.
       "showInAll": false,
       "systemPrompt": [
