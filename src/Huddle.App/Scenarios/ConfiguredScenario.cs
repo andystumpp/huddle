@@ -50,8 +50,11 @@ internal sealed class ConfiguredScenario : Scenario
         var parts = new List<string>();
         string context = HuddleConfig.Current.Context;
         if (!string.IsNullOrWhiteSpace(context)) parts.Add(context.Trim());
-        string notes = StickyNotesContext.Read();
-        if (!string.IsNullOrWhiteSpace(notes)) parts.Add(notes.Trim());
+        if (_def.StickyNotes)
+        {
+            string notes = StickyNotesContext.Read();
+            if (!string.IsNullOrWhiteSpace(notes)) parts.Add(notes.Trim());
+        }
         string profile = ProfileStore.Read();
         if (!string.IsNullOrWhiteSpace(profile)) parts.Add(profile.Trim());
         parts.Add(_def.SystemPrompt);

@@ -59,13 +59,6 @@ internal sealed class HuddleConfig
     public string Context { get; init; } = "";
 
     /// <summary>
-    /// Opt-in: when true, the user's Windows Sticky Notes are read (read-only) and their
-    /// text is injected as dynamic context into every scenario prompt. Default false.
-    /// Config key <c>stickyNotesContext</c>.
-    /// </summary>
-    public bool StickyNotesContext { get; init; }
-
-    /// <summary>
     /// The peek panel's width in DIPs. Default 384, clamped to <see cref="MinPanelWidth"/>..
     /// <see cref="MaxPanelWidth"/> so an out-of-range value can't produce an unusable window.
     /// Config key <c>panelWidth</c>.
@@ -129,9 +122,6 @@ internal sealed class HuddleConfig
                     ? Math.Clamp(pw.GetInt32(), MinPanelWidth, MaxPanelWidth)
                     : DefaultPanelWidth;
 
-                bool stickyNotes = root.TryGetProperty("stickyNotesContext", out var snc)
-                    && snc.ValueKind == JsonValueKind.True;
-
                 return new HuddleConfig
                 {
                     Provider = provider,
@@ -141,7 +131,6 @@ internal sealed class HuddleConfig
                     CaptureActiveWindowOnly = activeWindowOnly,
                     SkipSensitiveMoments = skipSensitive,
                     Context = ReadStringOrLines(root, "context"),
-                    StickyNotesContext = stickyNotes,
                     PanelWidth = panelWidth,
                     Scenarios = ParseScenarios(root),
                 };
@@ -214,6 +203,7 @@ internal sealed class HuddleConfig
             Agent = e.TryGetProperty("agent", out var ag) && ag.ValueKind == JsonValueKind.String ? ag.GetString() : null,
             WebSearch = Bool("webSearch", false),
             ShowInAll = Bool("showInAll", true),
+            StickyNotes = Bool("stickyNotes", false),
             SystemPrompt = ReadStringOrLines(e, "systemPrompt"),
         };
     }

@@ -30,6 +30,7 @@ through its own login.
 | `captureScope` | `fullScreen` \| `activeWindow` | `fullScreen` | `fullScreen` captures the whole primary display (rich multi-window context). `activeWindow` captures only the focused window's own pixels — nothing overlapping or behind it — which makes `captureDenylist` an exact guarantee at the cost of peripheral context. |
 | `skipSensitiveMoments` | `true` \| `false` | `true` | When the vision model flags a frame as sensitive (compensation, health, credentials, PII), the tick stores **nothing**. Summaries never contain sensitive values regardless; this additionally drops the whole moment. Set `false` to keep the value-free summary for sensitive frames. |
 | `context` | string or array of lines | `""` | Shared context **prepended to every scenario's prompt** — state who you are and what you're working on once, instead of repeating it per scenario. Empty = no-op. Scenarios only (not the vision/moment prompt). |
+| `panelWidth` | integer (px) | `384` | Width of the docked peek-panel window, in pixels. Clamped to 280–1200. |
 | `scenarios` | array | `[]` | The full scenario set (there are no built-ins). Empty = no nudges. See [Scenarios](#scenarios) below. |
 
 Every field except `provider` has a default, so naming only the provider is a complete
@@ -63,6 +64,9 @@ Each scenario in the array needs only `key` and `systemPrompt`; everything else 
 | `model` | `sonnet` | **Provider-relative.** On `claude`: an alias (`opus`/`sonnet`/`haiku`). On `copilot`/`agency`: a Copilot model name (e.g. `claude-opus-5`) is used per-scenario as-is; a *bare* Claude alias (`opus`/`sonnet`/`haiku`, incl. the default) isn't a Copilot name, so it falls back to the top-level `model`. |
 | `effort` | *(none)* | `low`\|`medium`\|`high`\|`xhigh`\|`max`. Reasoning effort, applied on both Claude (`--effort`) and Copilot/Agency (`--effort`). |
 | `webSearch` | `false` | Ground the answer in a live search where the provider supports it. |
+| `showInAll` | `true` | When `false`, this scenario's nudges are kept out of the **All** filter view (still visible under the scenario's own pill), and a new one doesn't bump the chip's unread count. |
+| `agent` | *(none)* | **Copilot/Agency only.** A custom agent name, passed as `--agent`, additive with `model`/`effort`. The `claude` provider ignores it. Your agent must still return the nudge JSON. |
+| `stickyNotes` | `false` | Inject your live Windows Sticky Notes (read-only) as dynamic context into **this** scenario's prompt, positioned after `context` and before the learned profile. Off by default; opt in per scenario. |
 
 A scenario that is invalid (missing `key`/`systemPrompt`, a duplicate `key`, or an
 unrecognized `model`/`effort`) is skipped; the others still run.
@@ -98,6 +102,9 @@ any other line to accept its default):
     "model": "opus",                // provider-relative (see the model row above)
     "effort": "high",               // low|medium|high|xhigh|max; omit for none
     "webSearch": false,             // ground in a live search where the provider supports it
+    "showInAll": true,              // false = hide this scenario's nudges from the All view (pill still shows them)
+    "agent": "my-copilot-agent",    // copilot/agency only: run through a custom agent (--agent); omit for none
+    "stickyNotes": false,           // inject your live Windows Sticky Notes as context into this scenario
     "systemPrompt": "required — describe when to emit, when to stay silent, and the voice"
   }
 ]

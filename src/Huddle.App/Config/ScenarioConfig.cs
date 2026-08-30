@@ -22,5 +22,8 @@ internal sealed class ScenarioDef
     public string? Agent { get; init; }
     /// <summary>Whether this scenario's nudges appear in the "All" filter view. Default true.</summary>
     public bool ShowInAll { get; init; } = true;
+    /// <summary>Whether the user's Windows Sticky Notes are injected as dynamic context into
+    /// this scenario's prompt. Default false.</summary>
+    public bool StickyNotes { get; init; }
     public string SystemPrompt { get; init; } = "";
 }
